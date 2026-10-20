@@ -58,7 +58,7 @@
                             <tr>
                                 <td>{{ trabajo.trabajador.rut }}</td>
                                 <td>{{ trabajo.trabajador.nombre_trabajador }}</td>
-                                <td>{{ trabajo.fecha_trabajo }}</td> <!-- Fecha de trabajo -->
+                                <td>{{ trabajo.fecha_inicio|date:"d-m-Y H:i" }}</td> <!-- Fecha de trabajo -->
                                 <td>{{ trabajo.horas_trabajadas }}</td>
                                 <td>{{ trabajo.descripcion }}</td>
                             </tr>

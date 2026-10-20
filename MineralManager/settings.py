@@ -23,7 +23,7 @@ STATIC_DIRS = os.path.join(BASE_DIR, "static")
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-(l9mlp=xzoqs-8tuthd$#w3ok25qen5@t+1#$x1*tyeo_3ch(e'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-solo-para-desarrollo-local')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -86,7 +86,7 @@ WSGI_APPLICATION = 'MineralManager.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.environ.get('DJANGO_DB_PATH', BASE_DIR / 'db.sqlite3'),
     }
 }
 
@@ -142,9 +142,9 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'  # Aquí va el proveedor de correo
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'mineralmanager3@gmail.com'  # correo
-EMAIL_HOST_PASSWORD = 'wbjo whmz zocw mkyt'  # contraseña
-DEFAULT_FROM_EMAIL = 'mineralmanager3@gmail.com'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')  # correo
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')  # contraseña de aplicación
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 AUTH_USER_MODEL = 'MineralApp.CustomUser'
 EMAIL_CONFIRMATION_REQUIRED = False  

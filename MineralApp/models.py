@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import F
 from django.utils import timezone
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.exceptions import ValidationError
@@ -26,7 +27,7 @@ class CustomUserManager(BaseUserManager):
             username=username,
             password=password,
         )
-        user.is_admin = c
+        user.is_admin = True
         user.is_staff = True
         user.is_superuser = True  # Aquí definimos directamente el campo
         user.save(using=self._db)

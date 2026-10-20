@@ -119,12 +119,12 @@
         {% endif %}
 
         <h3>Subir Archivos</h3>
-        <p>Formatos soportados: CSV</p>
+        <p>Formatos soportados: CSV o Excel (.xlsx, una hoja por tabla)</p>
         <form method="POST" enctype="multipart/form-data" action="{% url 'upload_csv' %}" id="uploadForm">
             {% csrf_token %}
             <div class="upload-container" onclick="document.getElementById('fileInput').click()">
                 <p id="uploadText">Selecciona tu archivo aquí</p>
-                <input type="file" name="file" id="fileInput" accept=".csv" onchange="updateFileName()">
+                <input type="file" name="file" id="fileInput" accept=".csv,.xlsx" onchange="updateFileName()">
             </div>
             <div id="fileInfo" class="file-info"></div>
             <button type="submit" class="btn btn-primary" id="submitBtn">Subir Archivo</button>

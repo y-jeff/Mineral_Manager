@@ -21,6 +21,7 @@ from django.utils.timezone import now
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import F
+from django.db import transaction
 
 # Bibliotecas de terceros
 from reportlab.lib import colors
@@ -28,6 +29,7 @@ from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from io import BytesIO
+from openpyxl import load_workbook
 
 # Módulos del proyecto
 from .forms import (
@@ -139,7 +141,48 @@ def procesar_archivo_csv(nombre_archivo, file):
     Identifica el archivo CSV y llama a la función de procesamiento correspondiente.
     """
     reader = decode_csv_file(file)
-    columnas = reader.fieldnames
+    procesar_tabla(nombre_archivo, reader.fieldnames, reader)
+
+
+# ----------------- PROCESAR ARCHIVO EXCEL -----------------
+def valor_celda(valor):
+    """
+    Convierte el valor de una celda de Excel al mismo texto que tendría en un CSV.
+    """
+    if valor is None:
+        return ''
+    if isinstance(valor, datetime):
+        if valor.hour or valor.minute:
+            return valor.strftime("%Y-%m-%d %H:%M")
+        return valor.strftime("%Y-%m-%d")
+    if isinstance(valor, float) and valor.is_integer():
+        return str(int(valor))
+    return str(valor).strip()
+
+
+def procesar_archivo_excel(nombre_archivo, file):
+    """
+    Procesa cada hoja del Excel como si fuera un CSV independiente, en el orden del libro.
+    Si una hoja falla, no se guarda nada (transacción).
+    """
+    libro = load_workbook(file, data_only=True, read_only=True)
+    with transaction.atomic():
+        for hoja in libro.worksheets:
+            if hoja.title.lower().startswith('instrucciones'):
+                continue
+            filas = [[valor_celda(v) for v in fila] for fila in hoja.iter_rows(values_only=True)]
+            filas = [f for f in filas if any(f)]
+            if not filas:
+                continue
+            columnas = filas[0]
+            datos = [dict(zip(columnas, f)) for f in filas[1:]]
+            procesar_tabla(f"{nombre_archivo} › {hoja.title}", columnas, datos)
+
+
+def procesar_tabla(nombre_archivo, columnas, reader):
+    """
+    Identifica el tipo de tabla según sus columnas y llama a la función de procesamiento correspondiente.
+    """
     print(f"Columnas detectadas en el archivo '{nombre_archivo}': {columnas}")
 
     try:
@@ -155,7 +198,7 @@ def procesar_archivo_csv(nombre_archivo, file):
             procesar_capacitaciones_csv(reader)  # Agregado para Capacitaciones.csv
         elif 'Código' in columnas and 'Fecha Mantenimiento' in columnas:
             procesar_mantenimientos_csv(reader)
-        elif 'Código' in columnas and 'horas_trabajadas' in columnas:
+        elif 'Código' in columnas and 'Fecha Inicio' in columnas and 'Fecha Fin' in columnas:
             procesar_trabajos_maquinaria_csv(reader)
         else:
             raise Exception(f"El archivo {nombre_archivo} no es reconocido o tiene formato incorrecto.")
@@ -169,12 +212,15 @@ def procesar_archivo_csv(nombre_archivo, file):
 @login_required
 def upload_csv(request):
     """
-    Vista principal para manejar la subida de archivos CSV.
+    Vista principal para manejar la subida de archivos CSV o Excel (.xlsx).
     """
     if request.method == 'POST' and 'file' in request.FILES:
         archivo = request.FILES['file']
         try:
-            procesar_archivo_csv(archivo.name, archivo)
+            if archivo.name.lower().endswith('.xlsx'):
+                procesar_archivo_excel(archivo.name, archivo)
+            else:
+                procesar_archivo_csv(archivo.name, archivo)
             messages.success(request, "Subida con éxito.")  # Mensaje directo
         except Exception as e:
             messages.error(request, f"Error: {e}")
@@ -344,14 +390,22 @@ def procesar_trabajos_maquinaria_csv(reader):
     Procesa el archivo Trabajos_Maquinaria.csv.
     """
     for row in reader:
-        maquinaria = Maquinaria.objects.get(codigo_maquinaria=row['maquinaria_id'])
-        trabajador = Trabajador.objects.get(rut=row['trabajador_id'])
-        TrabajoMaquinaria.objects.create(
-            maquinaria=maquinaria,
-            trabajador=trabajador,
-            fecha_trabajo=datetime.strptime(row['fecha_trabajo'], "%Y-%m-%d").date(),
-            horas_trabajadas=int(row['horas_trabajadas'])
-        )
+        try:
+            maquinaria = Maquinaria.objects.get(codigo_maquinaria=row['Código'])
+            trabajador = Trabajador.objects.get(rut=row['RUT'])
+            TrabajoMaquinaria.objects.create(
+                maquinaria=maquinaria,
+                trabajador=trabajador,
+                fecha_inicio=timezone.make_aware(datetime.strptime(row['Fecha Inicio'], "%Y-%m-%d %H:%M")),
+                fecha_fin=timezone.make_aware(datetime.strptime(row['Fecha Fin'], "%Y-%m-%d %H:%M")),
+                descripcion=row['Descripción']
+            )
+        except Maquinaria.DoesNotExist:
+            raise Exception(f"Error: No existe maquinaria con código {row['Código']}")
+        except Trabajador.DoesNotExist:
+            raise Exception(f"Error: No existe trabajador con RUT {row['RUT']}")
+        except Exception as e:
+            raise Exception(f"Error en trabajo de maquinaria: {e}")
 
 # -------------------- Vista de pañol -----------------------------------
 @login_required
@@ -1236,12 +1290,13 @@ def add_trabajo_maquinaria(request):
             maquinaria = get_object_or_404(Maquinaria, id=maquinaria_id)
             trabajador = get_object_or_404(Trabajador, rut=trabajador_rut)
 
-            # Guardar el trabajo
+            # Guardar el trabajo (termina ahora; las horas se calculan desde inicio y fin)
+            fecha_fin = timezone.now()
             trabajo = TrabajoMaquinaria.objects.create(
                 maquinaria=maquinaria,
                 trabajador=trabajador,
-                fecha_trabajo=timezone.now().date(),  # Fecha actual
-                horas_trabajadas=int(horas_trabajadas),
+                fecha_inicio=fecha_fin - timedelta(hours=int(horas_trabajadas)),
+                fecha_fin=fecha_fin,
                 descripcion=descripcion
             )
 
@@ -1325,14 +1380,14 @@ def ver_trabajos(request, maquinaria_id):
     search_query = request.GET.get('search', '')
 
     # Filtrar trabajos por búsqueda
-    trabajos = TrabajoMaquinaria.objects.filter(maquinaria=maquinaria).order_by('-fecha_trabajo')
+    trabajos = TrabajoMaquinaria.objects.filter(maquinaria=maquinaria).order_by('-fecha_inicio')
 
     if search_query:
         trabajos = trabajos.filter(
             Q(trabajador__nombre_trabajador__icontains=search_query) |  # Buscar por nombre del trabajador
             Q(trabajador__rut__icontains=search_query) |               # Buscar por RUT del trabajador
             Q(descripcion__icontains=search_query) |                   # Buscar en descripción
-            Q(fecha_trabajo__icontains=search_query)                   # Buscar en fecha
+            Q(fecha_inicio__icontains=search_query)                    # Buscar en fecha
         )
 
     return render(request, 'ver_trabajos.html', {'trabajos': trabajos, 'maquinaria': maquinaria, 'search_query': search_query})
