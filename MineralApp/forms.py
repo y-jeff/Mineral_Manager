@@ -1,9 +1,13 @@
+"""
+Formularios de Mineral Manager.
+"""
 from django import forms
-from .models import (
-    ArticuloPanol, ArticuloBodega, Producto, 
-    Trabajador, Capacitacion, CapacitacionTrabajador, Bodega, MovimientoArticulo, RetiroArticulo
-)
 from django.forms import inlineformset_factory
+
+from .models import (
+    ArticuloBodega, ArticuloPanol, Capacitacion, CapacitacionTrabajador, MovimientoArticulo,
+    Producto, RetiroArticulo, Trabajador,
+)
 
 
 # Formulario para subir archivos
@@ -117,14 +121,15 @@ class RetiroArticuloForm(forms.ModelForm):
     class Meta:
         model = RetiroArticulo
         fields = ['trabajador', 'articulo', 'cantidad']
+        labels = {'trabajador': 'Trabajador', 'articulo': 'Artículo', 'cantidad': 'Cantidad'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Configurar el queryset y opciones iniciales
+        # Solo trabajadores activos y artículos con stock disponible
         self.fields['trabajador'].queryset = Trabajador.objects.filter(activo=True)
         self.fields['trabajador'].empty_label = "Seleccione un trabajador"
-        self.fields['articulo'].queryset = ArticuloPanol.objects.all()
+        self.fields['articulo'].queryset = ArticuloPanol.objects.filter(cantidad__gt=0).select_related('panol')
         self.fields['articulo'].empty_label = "Seleccione un artículo"
 
         # Configurar widgets para mejorar la apariencia y funcionalidad

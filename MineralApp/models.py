@@ -1,11 +1,16 @@
+"""
+Modelos de datos de Mineral Manager.
+"""
 from django.db import models
+from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.exceptions import ValidationError
 
-# Custom User Manager
 class CustomUserManager(BaseUserManager):
+    """Crea usuarios y superusuarios del modelo CustomUser (login por nombre de usuario)."""
+
     def create_user(self, username, email, password=None):
         if not email:
             raise ValueError("El usuario debe tener un correo electrónico.")
@@ -33,8 +38,9 @@ class CustomUserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-# Modelo de Usuario Personalizado
 class CustomUser(AbstractBaseUser, PermissionsMixin):
+    """Usuario del sistema. Inicia sesión con `username`; el correo se usa para recuperar la contraseña."""
+
     username = models.CharField(max_length=50, unique=True)
     email = models.EmailField(max_length=60, unique=True)
     email_confirmed = models.BooleanField(default=False)
@@ -52,42 +58,49 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.username
     
-# Área
 class Area(models.Model):
+    """Área de la faena (Extracción, Planta, Mantenimiento...). Agrupa trabajadores y maquinaria."""
+
     nombre_area = models.CharField(max_length=100, unique=True)
 
     def __str__(self):
         return self.nombre_area
 
-# Cargo
 class Cargo(models.Model):
+    """Cargo o puesto de un trabajador."""
+
     nombre_cargo = models.CharField(max_length=256, unique=True)
 
     def __str__(self):
         return self.nombre_cargo
 
-# Jornada
 class Jornada(models.Model):
+    """Tipo de jornada: Diurna o Nocturna."""
+
     tipo_jornada = models.CharField(max_length=10, unique=True)
 
     def __str__(self):
         return self.tipo_jornada
 
-# Turno
 class Turno(models.Model):
+    """Turno de trabajo: A o B."""
+
     tipo_turno = models.CharField(max_length=1, choices=[('A', 'A'), ('B', 'B')])
 
     def __str__(self):
         return f"Turno {self.tipo_turno}"
 
-# Horario (Ciclo de Trabajo)
 class Horario(models.Model):
+    """Ciclo de trabajo/descanso, por ejemplo 7x7, 4x3 o 5x2."""
+
     ciclo = models.CharField(max_length=10)
     def __str__(self):
         return f"Ciclo {self.ciclo}"
 
-# Trabajador
 class Trabajador(models.Model):
+    """Trabajador de la faena, identificado por su RUT. Las bajas se hacen con `activo=False`
+    para conservar su historial."""
+
     rut = models.CharField(max_length=100, primary_key=True)
     nombre_trabajador = models.CharField(max_length=256)
     area = models.ForeignKey(Area, on_delete=models.RESTRICT)
@@ -100,8 +113,9 @@ class Trabajador(models.Model):
     def __str__(self):
         return f"{self.nombre_trabajador} ({self.rut})"
     
-# Capacitacion
 class Capacitacion(models.Model):
+    """Tipo de certificación. Si es renovable, cada asignación tiene fecha de vencimiento."""
+
     nombre_capacitacion = models.CharField(max_length=256)
     es_renovable = models.BooleanField(default=False)
 
@@ -110,8 +124,9 @@ class Capacitacion(models.Model):
 
     
 
-# CapacitacionTrabajador
 class CapacitacionTrabajador(models.Model):
+    """Certificación asignada a un trabajador, con su fecha de inicio y, si es renovable, de vencimiento."""
+
     trabajador = models.ForeignKey(Trabajador, on_delete=models.RESTRICT)
     capacitacion = models.ForeignKey(Capacitacion, on_delete=models.RESTRICT)
     fecha_inicio = models.DateField(default=timezone.now)
@@ -127,20 +142,24 @@ class CapacitacionTrabajador(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-# Panol
 class Panol(models.Model):
+    """Pañol: lugar desde donde se prestan herramientas a los trabajadores."""
+
     nombre_panol = models.CharField(max_length=50, unique=True)
 
     def __str__(self):
         return self.nombre_panol
 
-# Bodega
 class Bodega(models.Model):
+    """Bodega de insumos y repuestos. Abastece a los pañoles."""
+
     nombre_bodega = models.CharField(max_length=50, unique=True)
 
     def __str__(self):
         return self.nombre_bodega
 class Producto(models.Model):
+    """Modelo heredado de una versión anterior; se mantiene por compatibilidad con las migraciones."""
+
     disponibilidad_choices = [
         ('si', 'Sí'),
         ('no', 'No'),
@@ -153,8 +172,9 @@ class Producto(models.Model):
 
     def __str__(self):
         return f'{self.disponibilidad}'
-# Articulo en Panol
 class ArticuloPanol(models.Model):
+    """Stock de un artículo en un pañol."""
+
     panol = models.ForeignKey(Panol, on_delete=models.RESTRICT)
     nombre_articulo = models.CharField(max_length=50)
     descripcion_articulo = models.CharField(max_length=2000)
@@ -163,8 +183,9 @@ class ArticuloPanol(models.Model):
     def __str__(self):
         return f"{self.nombre_articulo} en {self.panol}"
 
-# Articulo en Bodega
 class ArticuloBodega(models.Model):
+    """Stock de un artículo en una bodega."""
+
     bodega = models.ForeignKey(Bodega, on_delete=models.RESTRICT)
     nombre_articulo = models.CharField(max_length=50)
     descripcion_articulo = models.CharField(max_length=2000)
@@ -173,8 +194,9 @@ class ArticuloBodega(models.Model):
     def __str__(self):
         return f"{self.nombre_articulo} en {self.bodega}"
 
-# Maquinaria
 class Maquinaria(models.Model):
+    """Equipo de la faena. En la práctica `estado` guarda "Activo", "En Mantenimiento" o "Inactivo"."""
+
     ESTADOS = [
         ('activo', 'Activo'),
         ('mantenimiento', 'En Mantenimiento'),
@@ -190,8 +212,9 @@ class Maquinaria(models.Model):
     def __str__(self):
         return self.nombre_maquinaria
 
-# Movimiento de Articulo
 class MovimientoArticulo(models.Model):
+    """Registro de un traspaso de stock desde una bodega a un pañol."""
+
     articulo = models.ForeignKey(ArticuloBodega, on_delete=models.CASCADE)
     origen = models.ForeignKey(Bodega, on_delete=models.CASCADE)
     destino = models.ForeignKey(Panol, on_delete=models.CASCADE)
@@ -200,17 +223,24 @@ class MovimientoArticulo(models.Model):
     fecha_movimiento = models.DateTimeField(auto_now_add=True)
 
     @staticmethod
+    @transaction.atomic
     def mover_articulo(articulo, destino, cantidad, motivo):
+        """
+        Traspasa `cantidad` unidades de un artículo de bodega a un pañol y deja registro del movimiento.
+        Si el pañol no tiene ese artículo, lo crea con la misma descripción.
+        """
         articulo.cantidad -= cantidad
         articulo.save()
 
-        ArticuloPanol.objects.update_or_create(
+        articulo_panol, _ = ArticuloPanol.objects.get_or_create(
             nombre_articulo=articulo.nombre_articulo,
             panol=destino,
-            defaults={'cantidad': F('cantidad') + cantidad}
+            defaults={'descripcion_articulo': articulo.descripcion_articulo, 'cantidad': 0},
         )
+        articulo_panol.cantidad = F('cantidad') + cantidad  # Suma en la base de datos, sin condiciones de carrera
+        articulo_panol.save()
 
-        MovimientoArticulo.objects.create(
+        return MovimientoArticulo.objects.create(
             articulo=articulo,
             origen=articulo.bodega,
             destino=destino,
@@ -218,8 +248,9 @@ class MovimientoArticulo(models.Model):
             motivo=motivo
         )
     
-# Registro de horas
 class RegistroHoras(models.Model):
+    """Horas trabajadas y esperadas de un trabajador (o un equipo) en una fecha."""
+
     maquinaria = models.ForeignKey(Maquinaria, null=True, blank=True, on_delete=models.CASCADE)
     trabajador = models.ForeignKey(Trabajador, null=True, blank=True, on_delete=models.CASCADE)
     area = models.ForeignKey(Area, on_delete=models.CASCADE)
@@ -227,8 +258,9 @@ class RegistroHoras(models.Model):
     horas_esperadas = models.IntegerField(default=40)
     fecha_registro = models.DateField()
 
-#retiro de articulo
 class RetiroArticulo(models.Model):
+    """Préstamo de un artículo del pañol a un trabajador y su devolución."""
+
     trabajador = models.ForeignKey(Trabajador, on_delete=models.CASCADE)
     articulo = models.ForeignKey(ArticuloPanol, on_delete=models.CASCADE)
     cantidad = models.PositiveIntegerField()
@@ -244,8 +276,9 @@ class RetiroArticulo(models.Model):
     def __str__(self):
         return f"Retiro: {self.articulo.nombre_articulo} por {self.trabajador.nombre_trabajador}"
 
-# Mantenimiento de maquinaria
 class MantenimientoMaquinaria(models.Model):
+    """Mantenimiento realizado a un equipo."""
+
     maquinaria = models.ForeignKey(Maquinaria, on_delete=models.CASCADE)
     fecha_mantenimiento = models.DateField()
     descripcion = models.TextField()
@@ -254,8 +287,10 @@ class MantenimientoMaquinaria(models.Model):
     def __str__(self):
         return f"Mantenimiento {self.maquinaria.nombre_maquinaria} el {self.fecha_mantenimiento}"
 
-# Trabajo con maquinaria
 class TrabajoMaquinaria(models.Model):
+    """Uso de un equipo por un trabajador. `horas_trabajadas` se calcula al guardar
+    a partir de `fecha_inicio` y `fecha_fin`."""
+
     maquinaria = models.ForeignKey(Maquinaria, on_delete=models.CASCADE)
     trabajador = models.ForeignKey(Trabajador, on_delete=models.CASCADE)
     fecha_inicio = models.DateTimeField()

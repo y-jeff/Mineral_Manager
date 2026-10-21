@@ -1,80 +1,83 @@
-# Módulos estándar de Python
+"""
+Vistas de Mineral Manager.
+
+Secciones:
+  - Acceso y panel principal
+  - Carga masiva de datos (CSV y Excel)
+  - Inventario: pañol, bodega, traspasos y retiros
+  - Trabajadores y certificaciones
+  - Maquinaria: estado, mantenimientos y trabajos
+"""
+# Biblioteca estándar
 import csv
 import json
 from datetime import datetime, timedelta
-import chardet
-import locale
+from io import BytesIO
 
-locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-
-# Django - Configuración y utilidades
+# Django
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
-from django.db.models import Q, Sum
+from django.db import transaction
+from django.db.models import Count, Q, Sum
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from datetime import datetime, timedelta
-from django.utils.timezone import now
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
-from django.db.models import F
-from django.db import transaction
+from django.utils.timezone import now
 
-# Bibliotecas de terceros
+# Terceros
+import chardet
+from openpyxl import load_workbook
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from io import BytesIO
-from openpyxl import load_workbook
 
-# Módulos del proyecto
-from .forms import (
-    ArticuloBodegaForm, ArticuloPanolForm,
-    CapacitacionTrabajadorFormSet,
-    RetiroArticuloForm,
-)
+# Proyecto
+from .forms import ArticuloBodegaForm, ArticuloPanolForm, RetiroArticuloForm
 from .models import (
-    Area, ArticuloBodega, ArticuloPanol, Bodega, Capacitacion,
-    CapacitacionTrabajador, Cargo, Horario, Jornada,
-    Maquinaria, MovimientoArticulo,
-    Panol, RegistroHoras, RetiroArticulo, Trabajador, Turno,
-    MantenimientoMaquinaria, TrabajoMaquinaria
-
+    Area, ArticuloBodega, ArticuloPanol, Bodega, Capacitacion, CapacitacionTrabajador, Cargo,
+    CustomUser, Horario, Jornada, MantenimientoMaquinaria, Maquinaria, MovimientoArticulo, Panol,
+    RegistroHoras, RetiroArticulo, Trabajador, TrabajoMaquinaria, Turno,
 )
-# Vista para inicio de sesión y redirección si ya está autenticado
+
+
+# =============================================================================
+# Acceso y panel principal
+# =============================================================================
+
 def login_signup_view(request):
-    # Si el usuario ya está autenticado, redirige al home
+    """
+    Inicio de sesión. Si el usuario ya está autenticado, lo envía al panel principal.
+    Si existe la cuenta de demostración, el formulario muestra sus credenciales.
+    """
     if request.user.is_authenticated:
         return redirect('home')
 
+    contexto = {'demo_disponible': CustomUser.objects.filter(username='demo', is_active=True).exists()}
+
     if request.method == "POST":
-        if 'confirm_password' not in request.POST:
-            username = request.POST.get("username")
-            password = request.POST.get("password")
-            user = authenticate(request, username=username, password=password)
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+        user = authenticate(request, username=username, password=password)
 
-            if user is not None:
-                if user.email_confirmed or not settings.EMAIL_CONFIRMATION_REQUIRED:
-                    login(request, user)
-                    if user.is_superuser:
-                        return redirect('/admin/')
-                    else:
-                        return redirect('home')
-                else:
-                    return render(request, 'login.html', {'error': 'Su cuenta no ha sido confirmada.'})
-            else:
-                return render(request, 'login.html', {'error': 'Nombre de usuario o contraseña incorrectos.'})
-    
-    return render(request, 'login.html')
+        if user is None:
+            contexto['error'] = 'Nombre de usuario o contraseña incorrectos.'
+        elif not user.email_confirmed and settings.EMAIL_CONFIRMATION_REQUIRED:
+            contexto['error'] = 'Su cuenta no ha sido confirmada.'
+        else:
+            login(request, user)
+            return redirect('home')
+
+    return render(request, 'login.html', contexto)
 
 
-# Página Principal
 @login_required
 def index(request):
+    """
+    Panel principal: indicadores, gráficos, certificaciones por vencer y artículos para reponer.
+    """
     total_trabajadores = Trabajador.objects.filter(activo=True).count()
     stock_bajo_panol = ArticuloPanol.objects.filter(cantidad__lte=50).count()
     stock_bajo_bodega = ArticuloBodega.objects.filter(cantidad__lte=50).count()
@@ -99,29 +102,52 @@ def index(request):
     maquinaria_mantenimiento = Maquinaria.objects.filter(estado="En Mantenimiento").count()
     maquinaria_inactiva = Maquinaria.objects.filter(estado="Inactivo").count()
 
+    # Datos para los gráficos del panel (se pasan al template como JSON con json_script)
+    trabajadores_por_area = (
+        Trabajador.objects.filter(activo=True)
+        .values('area__nombre_area').annotate(total=Count('rut')).order_by('-total')
+    )
+    maquinaria_por_estado = Maquinaria.objects.values('estado').annotate(total=Count('id')).order_by('estado')
+    graficos = {
+        'areas': {
+            'labels': [fila['area__nombre_area'] for fila in trabajadores_por_area],
+            'valores': [fila['total'] for fila in trabajadores_por_area],
+        },
+        'maquinaria': {
+            'labels': [fila['estado'] for fila in maquinaria_por_estado],
+            'valores': [fila['total'] for fila in maquinaria_por_estado],
+        },
+    }
+
+    # Artículos con menos stock entre bodega y pañol (para la lista de reposición)
+    reposicion = sorted(
+        [{'nombre': a.nombre_articulo, 'ubicacion': a.panol.nombre_panol, 'cantidad': a.cantidad}
+         for a in ArticuloPanol.objects.filter(cantidad__lte=10).select_related('panol')] +
+        [{'nombre': a.nombre_articulo, 'ubicacion': a.bodega.nombre_bodega, 'cantidad': a.cantidad}
+         for a in ArticuloBodega.objects.filter(cantidad__lte=10).select_related('bodega')],
+        key=lambda articulo: articulo['cantidad'],
+    )[:6]
+
     context = {
         "total_trabajadores": total_trabajadores,
+        "total_maquinaria": Maquinaria.objects.count(),
         "stock_bajo_panol": stock_bajo_panol,
         "stock_bajo_bodega": stock_bajo_bodega,
         "certificaciones_proximas": len(certificaciones_data),
-        "certificaciones_data": certificaciones_data,
+        "certificaciones_data": sorted(certificaciones_data, key=lambda c: c["fecha_fin"]),
         "maquinaria_mantenimiento": maquinaria_mantenimiento,
         "maquinaria_inactiva": maquinaria_inactiva,
+        "graficos": graficos,
+        "reposicion": reposicion,
     }
 
     return render(request, "index.html", context)
 
 
-# --------------------- Vista de Subida de archivos ----------------------------
-import csv
-import chardet
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from .models import *
-from datetime import datetime
+# =============================================================================
+# Carga masiva de datos (CSV y Excel)
+# =============================================================================
 
-# ----------------- DECODIFICAR ARCHIVO CSV -----------------
 
 def decode_csv_file(file):
     """
@@ -130,12 +156,10 @@ def decode_csv_file(file):
     raw_data = file.read()
     result = chardet.detect(raw_data)
     encoding = result['encoding']
-    print(f"Encoding detectado: {encoding}")  # Depuración
     decoded_file = raw_data.decode(encoding).splitlines()
     return csv.DictReader(decoded_file)
 
 
-# ----------------- PROCESAR ARCHIVO CSV -----------------
 def procesar_archivo_csv(nombre_archivo, file):
     """
     Identifica el archivo CSV y llama a la función de procesamiento correspondiente.
@@ -144,7 +168,6 @@ def procesar_archivo_csv(nombre_archivo, file):
     procesar_tabla(nombre_archivo, reader.fieldnames, reader)
 
 
-# ----------------- PROCESAR ARCHIVO EXCEL -----------------
 def valor_celda(valor):
     """
     Convierte el valor de una celda de Excel al mismo texto que tendría en un CSV.
@@ -183,8 +206,6 @@ def procesar_tabla(nombre_archivo, columnas, reader):
     """
     Identifica el tipo de tabla según sus columnas y llama a la función de procesamiento correspondiente.
     """
-    print(f"Columnas detectadas en el archivo '{nombre_archivo}': {columnas}")
-
     try:
         if 'RUT' in columnas and 'Nombre' in columnas and 'Area' in columnas:
             procesar_trabajadores_csv(reader)
@@ -203,12 +224,10 @@ def procesar_tabla(nombre_archivo, columnas, reader):
         else:
             raise Exception(f"El archivo {nombre_archivo} no es reconocido o tiene formato incorrecto.")
     except Exception as e:
-        print(f"Error al procesar archivo '{nombre_archivo}': {e}")
         raise e
 
         
 
-# ----------------- VISTA PRINCIPAL: UPLOAD CSV -----------------
 @login_required
 def upload_csv(request):
     """
@@ -228,7 +247,7 @@ def upload_csv(request):
 
     return render(request, 'upload.html')
 
-# ----------------- FUNCIONES DE PROCESAMIENTO -----------------
+# Funciones de procesamiento: una por tipo de tabla. Reciben las filas como diccionarios.
 
 def procesar_trabajadores_csv(reader):
     """
@@ -269,18 +288,6 @@ def procesar_trabajadores_csv(reader):
         except Exception as e:
             raise Exception(f"Error al procesar trabajador RUT {row['RUT']}: {e}")
 
-def procesar_despidos_csv(reader):
-    """
-    Procesa el archivo Despidos.csv y actualiza el estado de los trabajadores.
-    """
-    for row in reader:
-        try:
-            trabajador = Trabajador.objects.filter(rut=row['RUT']).first()
-            if trabajador:
-                trabajador.activo = False
-                trabajador.save()
-        except Exception as e:
-            raise Exception(f"Error al procesar despidos: {e}")
 
 def procesar_maquinarias_csv(reader):
     """
@@ -407,9 +414,16 @@ def procesar_trabajos_maquinaria_csv(reader):
         except Exception as e:
             raise Exception(f"Error en trabajo de maquinaria: {e}")
 
-# -------------------- Vista de pañol -----------------------------------
+# =============================================================================
+# Inventario: pañol, bodega, traspasos y retiros
+# =============================================================================
+
 @login_required
 def panol_view(request):
+    """
+    Inventario del pañol: listado con filtros y alta, edición y eliminación de artículos.
+    Las acciones llegan por POST con ?crear, ?editar_id o ?eliminar_id en la URL (ver partials/inventario.html).
+    """
     search_query = request.GET.get('q', '')
     ubicacion_id = request.GET.get('ubicacion', '')
     cantidad_filtro = request.GET.get('cantidad_filtro', '')
@@ -440,8 +454,7 @@ def panol_view(request):
             create_form.save()
             messages.success(request, "Artículo agregado exitosamente.")
             return redirect('pañol')
-        else:
-            print("Errores en el formulario de creación:", create_form.errors)
+        messages.error(request, "No se pudo agregar el artículo: revisa los datos ingresados.")
     else:
         create_form = ArticuloPanolForm()
 
@@ -455,8 +468,7 @@ def panol_view(request):
                 edit_form.save()
                 messages.success(request, "Artículo editado exitosamente.")
                 return redirect('pañol')
-            else:
-                print("Errores en el formulario de edición:", edit_form.errors)
+            messages.error(request, "No se pudo editar el artículo: revisa los datos ingresados.")
     else:
         edit_form = None
 
@@ -478,6 +490,7 @@ def panol_view(request):
         'ubicacion_id': ubicacion_id,
         'cantidad_filtro': cantidad_filtro,
         'advertencias': advertencias,
+        'agotados': ArticuloPanol.objects.filter(cantidad=0).count(),
         'create_form': create_form,  # Formulario de creación separado
         'edit_form': edit_form,
     }
@@ -486,6 +499,9 @@ def panol_view(request):
 
 @login_required
 def descargar_informe_pañol(request):
+    """
+    Genera un PDF con los artículos del pañol con stock bajo (≤ 10).
+    """
     # Filtrar artículos con cantidad baja o agotada
     articulos_bajos = ArticuloPanol.objects.filter(cantidad__lte=10)
 
@@ -536,10 +552,12 @@ def descargar_informe_pañol(request):
     response['Content-Disposition'] = 'attachment; filename="informe_articulos_bajos.pdf"'
     return response
 
-# Vista de Bodega
 
 @login_required
 def bodega_view(request):
+    """
+    Inventario de bodega: misma lógica que panol_view, pero sobre ArticuloBodega.
+    """
     search_query = request.GET.get('q', '')
     ubicacion_id = request.GET.get('ubicacion', '')
     cantidad_filtro = request.GET.get('cantidad_filtro', '')
@@ -571,8 +589,7 @@ def bodega_view(request):
             create_form.save()
             messages.success(request, "Artículo agregado exitosamente en la bodega.")
             return redirect('bodega')
-        else:
-            print("Errores en el formulario de creación:", create_form.errors)
+        messages.error(request, "No se pudo agregar el artículo: revisa los datos ingresados.")
     else:
         create_form = ArticuloBodegaForm()
 
@@ -586,8 +603,7 @@ def bodega_view(request):
                 edit_form.save()
                 messages.success(request, "Artículo editado exitosamente.")
                 return redirect('bodega')
-            else:
-                print("Errores en el formulario de edición:", edit_form.errors)
+            messages.error(request, "No se pudo editar el artículo: revisa los datos ingresados.")
     else:
         edit_form = None
 
@@ -610,16 +626,19 @@ def bodega_view(request):
         'ubicacion_id': ubicacion_id,
         'cantidad_filtro': cantidad_filtro,
         'advertencias': advertencias,
+        'agotados': ArticuloBodega.objects.filter(cantidad=0).count(),
         'create_form': create_form,  # Formulario de creación
         'edit_form': edit_form,      # Formulario de edición, si aplica
     }
 
     return render(request, 'bodega.html', context)
 
-# Descargar Informe de Bodega
 
 @login_required
 def descargar_informe_bodega(request):
+    """
+    Genera un PDF con los artículos de bodega con stock bajo (≤ 10).
+    """
     # Filter articles with low or zero quantity in "bodega"
     articulos_bajos = ArticuloBodega.objects.filter(cantidad__lte=10)
 
@@ -671,7 +690,6 @@ def descargar_informe_bodega(request):
     return response
 
 
-#artciculo bodega
 @login_required
 def obtener_articulos_por_bodega(request, bodega_id):
     """
@@ -687,6 +705,9 @@ def obtener_articulos_por_bodega(request, bodega_id):
 
 @login_required
 def mover_articulo_view(request):
+    """
+    Traspaso de artículos de una bodega a un pañol, con historial de movimientos.
+    """
     # Cargar las bodegas y pañoles
     bodegas = Bodega.objects.all()
     panoles = Panol.objects.all()
@@ -703,23 +724,13 @@ def mover_articulo_view(request):
         articulo = get_object_or_404(ArticuloBodega, id=articulo_id, bodega_id=origen_id)
         destino = get_object_or_404(Panol, id=destino_id)
 
-        if cantidad > articulo.cantidad:
-            messages.error(request, "Cantidad solicitada excede el inventario disponible.")
+        if cantidad < 1 or cantidad > articulo.cantidad:
+            messages.error(request, "La cantidad debe ser mayor a 0 y no puede exceder el stock disponible.")
             return redirect('mover_articulo')
 
-        # Actualizar cantidades y registrar movimiento
-        articulo.cantidad -= cantidad
-        articulo.save()
-
-        MovimientoArticulo.objects.create(
-            articulo=articulo,
-            origen=articulo.bodega,
-            destino=destino,
-            cantidad=cantidad,
-            motivo=motivo,
-            fecha_movimiento=now()
-        )
-        messages.success(request, f"Movimiento exitoso de {cantidad} {articulo.nombre_articulo}.")
+        # Descuenta de bodega, suma al pañol y registra el movimiento (models.MovimientoArticulo)
+        MovimientoArticulo.mover_articulo(articulo, destino, cantidad, motivo)
+        messages.success(request, f"Se movieron {cantidad} × {articulo.nombre_articulo} a {destino.nombre_panol}.")
         return redirect('mover_articulo')
 
     # Historial de movimientos
@@ -732,9 +743,11 @@ def mover_articulo_view(request):
     }
     return render(request, 'mover_articulo.html', context)
 
-#retiro articulo
 @login_required
 def retiro_articulo_view(request):
+    """
+    Préstamo de artículos del pañol a trabajadores (descuenta stock) e historial de retiros.
+    """
     # Historial de retiros ordenados por fecha más reciente
     retiros = RetiroArticulo.objects.all().order_by('-fecha_retiro', '-id')
 
@@ -775,7 +788,12 @@ def retiro_articulo_view(request):
 
 @login_required
 def devolver_articulo(request, retiro_id):
-    # Buscar el registro de retiro por ID
+    """
+    Registra la devolución de un retiro y repone el stock del pañol. Solo acepta POST.
+    """
+    if request.method != 'POST':
+        return redirect('retiro_articulo')
+
     retiro = get_object_or_404(RetiroArticulo, id=retiro_id)
 
     # Verificar si ya fue devuelto
@@ -795,28 +813,25 @@ def devolver_articulo(request, retiro_id):
 
     return redirect('retiro_articulo')  # Redirigir a la página de historial
 
-# Normalizar RUT
 def normalizar_rut(rut):
-    return rut.replace(".", "").replace("-", "").strip().upper()
-
-# Vista para gestión de trabajadores
-
-
-def corregir_certificaciones_invalidas():
     """
-    Corrige las certificaciones no renovables eliminando cualquier fecha de finalización inválida.
+    Deja el RUT en el formato que usa el sistema: sin puntos, con guion y K mayúscula (12345678-K).
     """
-    certificaciones_invalidas = CapacitacionTrabajador.objects.filter(
-        Q(capacitacion__es_renovable=False) & ~Q(fecha_fin=None)
-    )
+    limpio = rut.replace(".", "").replace("-", "").strip().upper()
+    return f"{limpio[:-1]}-{limpio[-1]}"
 
-    for cert in certificaciones_invalidas:
-        cert.fecha_fin = None
-        cert.save()
 
-#Trabajadores
+
+
+# =============================================================================
+# Trabajadores y certificaciones
+# =============================================================================
+
 @login_required
 def trabajadores_view(request):
+    """
+    Listado de trabajadores activos con búsqueda y filtros por área, turno y vencimiento de certificaciones.
+    """
     trabajadores = Trabajador.objects.filter(activo=True)
 
     # Filtrar por búsqueda general
@@ -870,13 +885,20 @@ def trabajadores_view(request):
     for trabajador in trabajadores:
         horas_trabajadas = trabajador.registrohoras_set.aggregate(total=Sum('horas_trabajadas'))['total'] or 0
         horas_esperadas = trabajador.registrohoras_set.aggregate(total=Sum('horas_esperadas'))['total'] or 0
-        certificaciones = CapacitacionTrabajador.objects.filter(trabajador=trabajador)
+        certificaciones = CapacitacionTrabajador.objects.filter(trabajador=trabajador).select_related('capacitacion')
+
+        # Resumen para la columna "Certificaciones" de la tabla
+        hoy = now().date()
+        vencidas = sum(1 for c in certificaciones if c.fecha_fin and c.fecha_fin < hoy)
+        por_vencer = sum(1 for c in certificaciones if c.fecha_fin and hoy <= c.fecha_fin <= hoy + timedelta(days=90))
 
         trabajadores_data.append({
             'trabajador': trabajador,
             'horas_trabajadas': horas_trabajadas,
             'horas_esperadas': horas_esperadas,
-            'certificaciones': certificaciones,  # Incluye certificaciones en el contexto
+            'certificaciones': certificaciones,
+            'vencidas': vencidas,
+            'por_vencer': por_vencer,
         })
 
     context = {
@@ -884,12 +906,14 @@ def trabajadores_view(request):
         'areas': Area.objects.all(),
         'advertencia': advertencia,
     }
-    print(f"Trabajadores cargados al contexto: {len(trabajadores_data)}")
     return render(request, 'trabajadores.html', context)
 
 
 @login_required
 def add_trabajador_view(request):
+    """
+    Formulario para crear un trabajador, su registro de horas y sus certificaciones iniciales.
+    """
     if request.method == "POST":
         # Normalizar el RUT
         rut = normalizar_rut(request.POST.get('rut'))
@@ -928,6 +952,8 @@ def add_trabajador_view(request):
             fecha_registro=timezone.now()
         )
 
+        guardar_certificaciones_nuevas(trabajador, request.POST)
+
         messages.success(request, f"El trabajador {nombre} fue agregado exitosamente.")
         return redirect('gestion_trabajadores')
 
@@ -938,12 +964,35 @@ def add_trabajador_view(request):
         'jornadas': Jornada.objects.all(),
         'turnos': Turno.objects.all(),
         'horarios': Horario.objects.all(),
+        'capacitaciones_disponibles': Capacitacion.objects.all(),
     }
     return render(request, 'add_trabajador.html', context)
 
-# Vista para editar trabajador
+
+def guardar_certificaciones_nuevas(trabajador, datos):
+    """
+    Crea las certificaciones agregadas en el formulario (campos certificacion_nueva_N,
+    fecha_inicio_nueva_N y fecha_fin_nueva_N). La fecha de fin solo se guarda si la
+    certificación es renovable.
+    """
+    for clave, valor in datos.items():
+        if not clave.startswith('certificacion_nueva_'):
+            continue
+        numero = clave.rsplit('_', 1)[-1]
+        capacitacion = get_object_or_404(Capacitacion, id=valor)
+        fecha_fin = datos.get(f'fecha_fin_nueva_{numero}') if capacitacion.es_renovable else None
+        CapacitacionTrabajador.objects.create(
+            trabajador=trabajador,
+            capacitacion=capacitacion,
+            fecha_inicio=datos.get(f'fecha_inicio_nueva_{numero}'),
+            fecha_fin=fecha_fin or None,
+        )
+
 @login_required
 def editar_trabajador(request, rut):
+    """
+    Edita datos, horas y certificaciones de un trabajador.
+    """
     trabajador = get_object_or_404(Trabajador, rut=rut)
 
     if request.method == 'POST':
@@ -998,17 +1047,7 @@ def editar_trabajador(request, rut):
                 cert.fecha_fin = fecha_fin
             cert.save()
 
-        for key, value in request.POST.items():
-            if key.startswith('certificacion_nueva_'):
-                capacitacion = get_object_or_404(Capacitacion, id=value)
-                fecha_inicio = request.POST.get(f'fecha_inicio_nueva_{key.split("_")[-1]}')
-                fecha_fin = request.POST.get(f'fecha_fin_nueva_{key.split("_")[-1]}') if capacitacion.es_renovable else None
-                CapacitacionTrabajador.objects.create(
-                    trabajador=trabajador,
-                    capacitacion=capacitacion,
-                    fecha_inicio=fecha_inicio,
-                    fecha_fin=fecha_fin,
-                )
+        guardar_certificaciones_nuevas(trabajador, request.POST)
 
         messages.success(request, 'El trabajador ha sido actualizado correctamente.')
         return redirect('gestion_trabajadores')
@@ -1035,10 +1074,11 @@ def editar_trabajador(request, rut):
     return render(request, 'editar_trabajador.html', context)
 
 
-# Eliminar certiificación
-@csrf_exempt
 @login_required
 def eliminar_certificacion(request, cert_id):
+    """
+    Elimina la certificación asignada a un trabajador. Se llama por fetch desde editar_trabajador.html.
+    """
     try:
         certificacion = get_object_or_404(CapacitacionTrabajador, id=cert_id)
         certificacion.delete()
@@ -1046,50 +1086,52 @@ def eliminar_certificacion(request, cert_id):
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error al eliminar certificación: {str(e)}'})
 
-#Actualizacion de Certificaciones
-def actualizar_capacitacion_trabajador(request, pk):
-    capacitacion_trabajador = get_object_or_404(CapacitacionTrabajador, pk=pk)
 
-    # Validar que no se pueda asignar fecha de fin a capacitaciones no renovables
-    if not capacitacion_trabajador.capacitacion.es_renovable and 'fecha_fin' in request.POST:
-        fecha_fin = request.POST.get('fecha_fin')
-        if fecha_fin:
-            raise ValidationError(
-                f"La capacitación '{capacitacion_trabajador.capacitacion.nombre_capacitacion}' no es renovable y no puede tener una fecha de finalización."
-            )
+@login_required
+def eliminar_trabajador(request):
+    """
+    Da de baja a un trabajador (activo=False) sin borrar su historial.
+    Recibe {"rut": "..."} por POST/JSON desde trabajadores.html.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido.'}, status=405)
 
-    # Actualizar los datos normalmente
-    capacitacion_trabajador.fecha_inicio = request.POST.get('fecha_inicio')
-    capacitacion_trabajador.fecha_fin = request.POST.get('fecha_fin', None)
-    capacitacion_trabajador.save()
+    rut = json.loads(request.body).get('rut', '').strip()
+    try:
+        trabajador = Trabajador.objects.get(rut=rut)
+    except Trabajador.DoesNotExist:
+        return JsonResponse({'success': False, 'message': f'Trabajador con RUT {rut} no encontrado.'})
+
+    trabajador.activo = False
+    trabajador.save()
+    return JsonResponse({'success': True, 'message': 'Trabajador dado de baja correctamente.'})
+
+
+@login_required
+def agregar_capacitacion(request):
+    """
+    Crea un nuevo tipo de certificación. Recibe {"nombre": str, "es_renovable": bool}
+    por POST/JSON desde el modal "Nuevo tipo de certificación" de trabajadores.html.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido.'}, status=405)
+
+    datos = json.loads(request.body)
+    nombre = datos.get('nombre', '').strip()
+    if not nombre:
+        return JsonResponse({'success': False, 'message': 'El nombre es obligatorio.'})
+    if Capacitacion.objects.filter(nombre_capacitacion__iexact=nombre).exists():
+        return JsonResponse({'success': False, 'message': f'Ya existe la certificación "{nombre}".'})
+
+    Capacitacion.objects.create(nombre_capacitacion=nombre, es_renovable=bool(datos.get('es_renovable')))
+    messages.success(request, f'Certificación "{nombre}" creada. Ya puedes asignarla a los trabajadores.')
     return JsonResponse({'success': True})
 
-# Ocultar trabajador (equivalente a eliminar visualmente)
-@csrf_exempt
-def eliminar_trabajador(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            rut = data.get('rut', '').strip()  # Recupera el RUT enviado
-            print("RUT recibido del frontend:", rut)  # Depuración
-
-            # Busca el trabajador tal como está en la base de datos
-            trabajador = Trabajador.objects.get(rut=rut)
-            trabajador.activo = False
-            trabajador.save()
-
-            return JsonResponse({'success': True, 'message': 'Trabajador eliminado correctamente.'})
-        except Trabajador.DoesNotExist:
-            print("Trabajador no encontrado en la base de datos.")
-            return JsonResponse({'success': False, 'message': f'Trabajador con RUT {rut} no encontrado.'})
-        except Exception as e:
-            print(f"Error inesperado: {e}")
-            return JsonResponse({'success': False, 'message': f'Error inesperado: {str(e)}'})
-    return JsonResponse({'success': False, 'message': 'Método no permitido.'})
-
-# Generar informe de certificaciones próximas a expirar
 @login_required
 def descargar_informe_trabajadores(request):
+    """
+    Genera un PDF con las certificaciones que vencen en los próximos 30 días.
+    """
     fecha_limite = now() + timedelta(days=30)
     trabajadores = Trabajador.objects.filter(
         capacitaciontrabajador__fecha_fin__lte=fecha_limite
@@ -1131,11 +1173,20 @@ def descargar_informe_trabajadores(request):
     buffer.seek(0)
     return FileResponse(buffer, as_attachment=True, filename="informe_trabajadores.pdf")
 
-from django.http import HttpResponseForbidden
 
-#Maquinaria
+# =============================================================================
+# Maquinaria: estado, mantenimientos y trabajos
+# =============================================================================
+
+# Estados válidos de un equipo (son los textos que se guardan en Maquinaria.estado)
+ESTADOS_MAQUINARIA = ('Activo', 'En Mantenimiento', 'Inactivo')
+
+
 @login_required
 def maquinaria_view(request):
+    """
+    Listado de equipos con búsqueda y filtros por estado y área.
+    """
     # Lista inicial de maquinarias
     maquinarias = Maquinaria.objects.all()
 
@@ -1178,65 +1229,35 @@ def maquinaria_view(request):
 
 
 
-@login_required
-def add_maquinaria(request):
-    if request.method == 'POST':
-        nombre = request.POST.get('nombre_maquinaria')
-        estado = request.POST.get('estado')
-        area_id = request.POST.get('area')
-        area = Area.objects.get(id=area_id) if area_id else None
-
-        Maquinaria.objects.create(
-            nombre_maquinaria=nombre,
-            estado=estado,
-            area=area,
-            fecha_adquisicion=now().date()  # Fecha actual al agregar
-        )
-        messages.success(request, f"La maquinaria {nombre} fue añadida exitosamente.")
-        return redirect('maquinaria')
 
 @login_required
 def edit_maquinaria(request, maquinaria_id):
+    """
+    Cambia el estado de un equipo (Activo, En Mantenimiento o Inactivo) desde el modal de maquinaria.html.
+    """
     maquinaria = get_object_or_404(Maquinaria, id=maquinaria_id)
 
     if request.method == 'POST':
-        estado = request.POST.get('estado')  # Solo se editará el estado
+        estado = request.POST.get('estado')
+        if estado not in ESTADOS_MAQUINARIA:
+            messages.error(request, "Estado no válido.")
+            return redirect('maquinaria')
 
-        # Convertir fecha al formato correcto
-        fecha_adquisicion = request.POST.get('fecha_adquisicion', None)
-        if fecha_adquisicion:
-            try:
-                fecha_adquisicion = datetime.strptime(fecha_adquisicion, "%d de %B de %Y").strftime("%Y-%m-%d")
-            except ValueError:
-                messages.error(request, "Formato de fecha inválido. Debe ser DD de Mes de YYYY.")
-                return redirect('maquinaria')
-
-        # Actualizar solo el estado y dejar fecha intacta si no se envía
         maquinaria.estado = estado
-        if fecha_adquisicion:
-            maquinaria.fecha_adquisicion = fecha_adquisicion
-
         maquinaria.save()
-        messages.success(request, "La maquinaria ha sido actualizada correctamente.")
+        messages.success(request, f"{maquinaria.nombre_maquinaria} quedó en estado «{estado}».")
         return redirect('maquinaria')
 
     return JsonResponse({'error': 'Método no permitido.'}, status=405)
 
 
-@login_required
-def delete_maquinaria(request, maquinaria_id):
-    maquinaria = get_object_or_404(Maquinaria, id=maquinaria_id)
-    if request.method == "POST":
-        maquinaria.delete()
-        messages.success(request, f"La maquinaria {maquinaria.nombre_maquinaria} fue eliminada exitosamente.")
-        return redirect('maquinaria')
-    else:
-        messages.error(request, "No se pudo eliminar la maquinaria.")
-        return redirect('maquinaria')
     
     
 @login_required
 def add_mantenimiento(request):
+    """
+    Registra un mantenimiento con fecha de hoy. Si el equipo no queda operativo, pasa a "En Mantenimiento".
+    """
     if request.method == "POST":
         maquinaria_id = request.POST.get('maquinaria')
         trabajador_id = request.POST.get('trabajador')
@@ -1268,9 +1289,10 @@ def add_mantenimiento(request):
 
 @login_required
 def add_trabajo_maquinaria(request):
+    """
+    Registra un trabajo con un equipo. El trabajo termina ahora y empieza `horas_trabajadas` antes.
+    """
     if request.method == "POST":
-        print("Datos recibidos del formulario: ", request.POST)  # Depuración
-
         maquinaria_id = request.POST.get("maquinaria")
         trabajador_rut = request.POST.get("trabajador")
         horas_trabajadas = request.POST.get("horas_trabajadas")
@@ -1292,7 +1314,7 @@ def add_trabajo_maquinaria(request):
 
             # Guardar el trabajo (termina ahora; las horas se calculan desde inicio y fin)
             fecha_fin = timezone.now()
-            trabajo = TrabajoMaquinaria.objects.create(
+            TrabajoMaquinaria.objects.create(
                 maquinaria=maquinaria,
                 trabajador=trabajador,
                 fecha_inicio=fecha_fin - timedelta(hours=int(horas_trabajadas)),
@@ -1300,12 +1322,10 @@ def add_trabajo_maquinaria(request):
                 descripcion=descripcion
             )
 
-            print("Trabajo guardado: ", trabajo)  # Depuración
             messages.success(request, "Trabajo agregado exitosamente.")
             return redirect('maquinaria')
 
         except Exception as e:
-            print("Error: ", e)  # Depuración
             messages.error(request, f"Error al guardar el trabajo: {e}")
             return redirect('maquinaria')
 
@@ -1325,39 +1345,15 @@ def desactivar_maquinaria(request, maquinaria_id):
         return redirect('maquinaria')  # Redirige a la vista de maquinarias
     return redirect('maquinaria')
 
-def obtener_mantenimientos(request, maquinaria_id):
-    mantenimientos = MantenimientoMaquinaria.objects.filter(maquinaria_id=maquinaria_id)
-    data = [
-        {
-            'rut': m.trabajador.rut,
-            'nombre_trabajador': m.trabajador.nombre,
-            'codigo_maquinaria': m.maquinaria.codigo,
-            'nombre_maquinaria': m.maquinaria.nombre,
-            'fecha_mantenimiento': m.fecha_mantenimiento.strftime('%Y-%m-%d'),
-            'descripcion': m.descripcion,
-        }
-        for m in mantenimientos
-    ]
-    return JsonResponse(data, safe=False)
-
-def obtener_trabajos(request, maquinaria_id):
-    trabajos = TrabajoMaquinaria.objects.filter(maquinaria_id=maquinaria_id)
-    data = [
-        {
-            'rut': t.trabajador.rut,
-            'nombre_trabajador': t.trabajador.nombre,
-            'codigo_maquinaria': t.maquinaria.codigo,
-            'nombre_maquinaria': t.maquinaria.nombre,
-            'horas_trabajadas': t.horas_trabajadas,
-            'descripcion': t.descripcion,
-        }
-        for t in trabajos
-    ]
-    return JsonResponse(data, safe=False)
 
 
 
+
+@login_required
 def ver_mantenimientos(request, maquinaria_id):
+    """
+    Historial de mantenimientos de un equipo, con búsqueda.
+    """
     maquinaria = get_object_or_404(Maquinaria, id=maquinaria_id)
     search_query = request.GET.get('search', '')
 
@@ -1366,16 +1362,20 @@ def ver_mantenimientos(request, maquinaria_id):
 
     if search_query:
         mantenimientos = mantenimientos.filter(
-            Q(trabajador__nombre_trabajador__icontains=search_query) |  # Buscar por nombre del trabajador
-            Q(trabajador__rut__icontains=search_query) |               # Buscar por RUT del trabajador
-            Q(descripcion__icontains=search_query) |                   # Buscar en descripción
-            Q(fecha_mantenimiento__icontains=search_query)             # Buscar en fecha
+            Q(realizado_por__nombre_trabajador__icontains=search_query) |  # Buscar por nombre del trabajador
+            Q(realizado_por__rut__icontains=search_query) |               # Buscar por RUT del trabajador
+            Q(descripcion__icontains=search_query) |                      # Buscar en descripción
+            Q(fecha_mantenimiento__icontains=search_query)                # Buscar en fecha
         )
 
     return render(request, 'ver_mantenimientos.html', {'mantenimientos': mantenimientos, 'maquinaria': maquinaria, 'search_query': search_query})
 
 
+@login_required
 def ver_trabajos(request, maquinaria_id):
+    """
+    Historial de trabajos realizados con un equipo, con búsqueda.
+    """
     maquinaria = get_object_or_404(Maquinaria, id=maquinaria_id)
     search_query = request.GET.get('search', '')
 
