@@ -105,6 +105,7 @@ python manage.py runserver
 - **Integridad del inventario:** los traspasos y retiros actualizan el stock con expresiones `F()` en la base de datos y quedan registrados en su historial.
 - **Seguridad:** todas las vistas requieren sesión, las acciones por `fetch` envían token CSRF y las credenciales se leen desde variables de entorno.
 - **Pruebas automáticas:** 20 pruebas cubren acceso, carga de datos, trabajadores, inventario y maquinaria. Se ejecutan en GitHub Actions con Python 3.10, 3.12 y 3.14.
+- **Listo para producción:** configuración por variables de entorno, cookies seguras, páginas de error propias y guía de despliegue.
 - **Datos de demostración reproducibles:** el comando `cargar_demo` arma la faena de ejemplo con fechas relativas al día actual, así siempre hay alertas que mostrar.
 - **Informes PDF** con ReportLab y **gráficos** con Chart.js.
 
@@ -126,16 +127,20 @@ Puedes subir un **Excel con una hoja por tabla** o un **CSV por tabla**. El sist
 | Mantenimientos | `Código`, `Fecha Mantenimiento`, `Descripción`, `Realizado Por` |
 | Trabajos Maquinaria | `Código`, `RUT`, `Fecha Inicio`, `Fecha Fin` (`AAAA-MM-DD HH:MM`), `Descripción` |
 
-## ⚙️ Configuración
+## ⚙️ Configuración y publicación
 
-Para probar en local no hace falta configurar nada. Para producción o para habilitar la recuperación de contraseña por correo, define estas variables de entorno (ejemplo en [`.env.example`](.env.example)):
+Para probar en local no hace falta configurar nada. En producción la app lee estas variables desde el entorno o desde un archivo `.env` (ejemplo en [`.env.example`](.env.example)):
 
 | Variable | Uso |
 |---|---|
-| `DJANGO_SECRET_KEY` | Clave secreta de Django. **Obligatoria en producción.** |
-| `DJANGO_DEBUG` | `True` o `False`. |
-| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Cuenta Gmail y [contraseña de aplicación](https://myaccount.google.com/apppasswords) para enviar correos. |
+| `DJANGO_DEBUG` | `False` en producción. |
+| `DJANGO_SECRET_KEY` | Clave secreta de Django. Con `DJANGO_DEBUG=False` la app no arranca sin ella. |
+| `DJANGO_ALLOWED_HOSTS` | Dominios permitidos, separados por coma. |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | Orígenes HTTPS de confianza, por ejemplo `https://midominio.com`. |
+| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Cuenta Gmail y [contraseña de aplicación](https://myaccount.google.com/apppasswords) para recuperar contraseñas. |
 | `DJANGO_DB_PATH` | Ruta a otro archivo SQLite (por defecto `db.sqlite3`). |
+
+📘 **[Guía para publicar la demo en PythonAnywhere](DEPLOY.md)** (gratis, siempre encendida y con datos que se reinician a diario).
 
 ## 🗂️ Estructura del proyecto
 
@@ -155,6 +160,7 @@ Mineral_Manager/
 ├── static/                     # Tema (CSS), JavaScript, ícono y Excel de ejemplo
 ├── docs/img/                   # Capturas de este README
 ├── iniciar_demo.bat / .sh      # Instalación y arranque en un paso
+├── DEPLOY.md                   # Publicación en PythonAnywhere
 └── requirements.txt
 ```
 

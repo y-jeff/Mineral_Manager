@@ -35,6 +35,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 # Proyecto
+from .demo import construir_libro
 from .forms import ArticuloBodegaForm, ArticuloPanolForm, RetiroArticuloForm
 from .models import (
     Area, ArticuloBodega, ArticuloPanol, Bodega, Capacitacion, CapacitacionTrabajador, Cargo,
@@ -246,6 +247,21 @@ def upload_csv(request):
         return redirect('upload_csv')  # Redirige para refrescar la página
 
     return render(request, 'upload.html')
+
+
+@login_required
+def descargar_excel_ejemplo(request):
+    """
+    Descarga el Excel de demostración (MineralApp/demo.py) generado con las fechas de hoy.
+    """
+    archivo = BytesIO()
+    construir_libro().save(archivo)
+    return HttpResponse(
+        archivo.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="MineralManager_Datos_Prueba.xlsx"'},
+    )
+
 
 # Funciones de procesamiento: una por tipo de tabla. Reciben las filas como diccionarios.
 

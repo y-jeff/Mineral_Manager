@@ -33,6 +33,7 @@ urlpatterns = [
     # Panel principal y carga de datos
     path('home/', views.index, name='home'),
     path('upload/', views.upload_csv, name='upload_csv'),
+    path('upload/ejemplo.xlsx', views.descargar_excel_ejemplo, name='descargar_excel_ejemplo'),
 
     # Trabajadores y certificaciones
     path('trabajadores/', views.trabajadores_view, name='gestion_trabajadores'),

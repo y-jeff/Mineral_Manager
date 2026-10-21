@@ -13,7 +13,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from .models import (
     ArticuloBodega, ArticuloPanol, Capacitacion, CapacitacionTrabajador, Maquinaria,
@@ -113,6 +113,12 @@ class CargaDatosTests(BaseDemoTest):
         respuesta = self.client.post(reverse('upload_csv'), {'file': archivo}, follow=True)
         self.assertContains(respuesta, 'NO-EXISTE')
         self.assertFalse(Maquinaria.objects.filter(codigo_maquinaria='NUEVA-1').exists())
+
+    def test_excel_de_ejemplo_tiene_fechas_de_hoy(self):
+        respuesta = self.client.get(reverse('descargar_excel_ejemplo'))
+        libro = load_workbook(BytesIO(respuesta.content))
+        self.assertIn('Trabajadores', libro.sheetnames)
+        self.assertIn(timezone.localdate().strftime('%d-%m-%Y'), libro['Instrucciones']['A2'].value)
 
 
 class TrabajadoresTests(BaseDemoTest):

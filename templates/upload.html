@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% load static %}
 
 {% block title %}Carga de datos{% endblock %}
 {% block page_title %}Carga de datos{% endblock %}
@@ -31,7 +30,7 @@
                     <div class="fw-semibold">¿Sin datos para probar?</div>
                     <div class="text-muted small">Descarga el Excel de ejemplo y súbelo aquí.</div>
                 </div>
-                <a href="{% static 'ejemplos/MineralManager_Datos_Prueba.xlsx' %}" class="btn btn-light text-nowrap" download><i class="bi bi-download me-1"></i>Excel de ejemplo</a>
+                <a href="{% url 'descargar_excel_ejemplo' %}" class="btn btn-light text-nowrap"><i class="bi bi-download me-1"></i>Excel de ejemplo</a>
             </div>
         </div>
     </div>

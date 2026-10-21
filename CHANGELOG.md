@@ -2,6 +2,17 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y [versionado semántico](https://semver.org/lang/es/).
 
+## [2.1.0] - 2026-10-21
+
+### Agregado
+- Guía `DEPLOY.md` para publicar la demo en PythonAnywhere, con reinicio diario de los datos.
+- Configuración de producción leída desde variables de entorno o un archivo `.env`: `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, cookies seguras y `STATIC_ROOT` para `collectstatic`.
+- El Excel de ejemplo de la pantalla "Carga de datos" se genera al momento con las fechas del día.
+
+### Corregido
+- `DJANGO_DEBUG` no se leía: la app siempre corría con `DEBUG=True`.
+- Con `DJANGO_DEBUG=False` y sin `DJANGO_SECRET_KEY`, la app usaba una clave insegura; ahora no arranca.
+
 ## [2.0.0] - 2026-10-20
 
 ### Agregado

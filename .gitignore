@@ -12,6 +12,9 @@ env/
 .venv/
 .env
 
+# Archivos estáticos generados por collectstatic
+staticfiles/
+
 # Python
 __pycache__/
 *.pyc
