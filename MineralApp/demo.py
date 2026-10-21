@@ -1,11 +1,12 @@
 """
-Genera datos_prueba/MineralManager_Datos_Prueba.xlsx con datos de ejemplo para probar
-todas las secciones de Mineral Manager.
+Datos de demostración de Mineral Manager.
+
+Define una faena minera de ejemplo (trabajadores, maquinaria, inventario, certificaciones,
+mantenimientos y trabajos) y la arma como un libro Excel con el mismo formato que acepta
+la pantalla "Carga de datos". Lo usa el comando `python manage.py cargar_demo`.
 
 Las fechas se calculan a partir del día de hoy, así siempre hay certificaciones
-expiradas, por expirar y vigentes. Uso:
-
-    python datos_prueba/generar_excel.py
+vencidas, por vencer y vigentes.
 """
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -16,7 +17,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 HOY = date.today()
-SALIDA = Path(__file__).resolve().parent / "MineralManager_Datos_Prueba.xlsx"
+# Copia descargable desde la pantalla "Carga de datos"
+EXCEL_EJEMPLO = Path(__file__).resolve().parent.parent / "static" / "ejemplos" / "MineralManager_Datos_Prueba.xlsx"
 
 
 def dias(n):
@@ -133,7 +135,7 @@ INSTRUCCIONES = [
     f"Generado el {HOY:%d-%m-%Y}. Las fechas son relativas a ese día.",
     "",
     "Cómo usarlo:",
-    "1. Inicia sesión y entra a «Subir Archivo».",
+    "1. Inicia sesión y entra a «Carga de datos».",
     "2. Sube este mismo .xlsx: cada hoja se carga como su tabla, en el orden de las pestañas.",
     "3. Si una hoja tiene un error, no se guarda nada del archivo.",
     "",
@@ -151,13 +153,14 @@ INSTRUCCIONES = [
     "• Certificaciones expiradas (3), por expirar en < 30 días (2) y en < 90 días (2).",
     "• Artículos agotados (cantidad 0) y con stock bajo (≤ 10) en Bodega y Pañol.",
     "",
-    "Para regenerar con fechas actualizadas: python datos_prueba/generar_excel.py",
+    "Para regenerar con fechas actualizadas: python manage.py cargar_demo --excel",
 ]
 
 ENCABEZADO = PatternFill("solid", fgColor="1F2937")
 
 
 def agregar_hoja(libro, titulo, columnas, filas):
+    """Agrega una hoja con formato de tabla (encabezado oscuro, filtros y anchos ajustados)."""
     hoja = libro.create_sheet(titulo)
     hoja.append(columnas)
     for fila in filas:
@@ -185,21 +188,17 @@ def agregar_hoja(libro, titulo, columnas, filas):
     hoja.freeze_panes = "A2"
 
 
-def main():
+def construir_libro():
+    """Devuelve el libro Excel de demostración: una hoja por tabla más una hoja de instrucciones."""
     libro = Workbook()
     libro.remove(libro.active)
     for titulo, columnas, filas in HOJAS:
         agregar_hoja(libro, titulo, columnas, filas)
 
+    # procesar_archivo_excel ignora las hojas cuyo nombre empieza con "Instrucciones"
     hoja = libro.create_sheet("Instrucciones")
     for linea in INSTRUCCIONES:
         hoja.append([linea])
     hoja["A1"].font = Font(bold=True, size=14)
     hoja.column_dimensions["A"].width = 110
-
-    libro.save(SALIDA)
-    print(f"Excel generado: {SALIDA}")
-
-
-if __name__ == "__main__":
-    main()
+    return libro

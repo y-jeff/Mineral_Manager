@@ -1,0 +1,3 @@
+# Finales de línea según el sistema donde se ejecuta cada script
+*.sh  text eol=lf
+*.bat text eol=crlf
