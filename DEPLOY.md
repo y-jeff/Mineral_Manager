@@ -1,8 +1,8 @@
 # Publicar la demo en PythonAnywhere
 
-Guía para publicar Mineral Manager gratis en [PythonAnywhere](https://www.pythonanywhere.com), con datos de demostración que se reinician todos los días.
+Guía para publicar Mineral Manager gratis en [PythonAnywhere](https://www.pythonanywhere.com).
 
-Resultado: la app queda en `https://TU-USUARIO.pythonanywhere.com`, siempre encendida y con la cuenta `demo` / `demo1234`.
+Resultado: la app queda en `https://TU-USUARIO.pythonanywhere.com`, siempre encendida y con la cuenta `demo` / `demo1234`. La demo oficial está en <https://jeff017.pythonanywhere.com>.
 
 > Tiempo estimado: 10 minutos. En los comandos, `TU-USUARIO` es tu nombre de usuario de PythonAnywhere.
 
@@ -85,21 +85,19 @@ application = get_wsgi_application()
 5. Vuelve a la pestaña **Web** y presiona el botón verde **Reload**.
 6. Abre `https://TU-USUARIO.pythonanywhere.com` y entra con `demo` / `demo1234`.
 
-## 6. Reiniciar la demo todos los días
+## 6. Restaurar los datos de la demo
 
-Así, si un visitante borra o cambia datos, la demo vuelve a quedar limpia (y las fechas de las certificaciones se actualizan).
-
-Ve a la pestaña **Tasks**, elige una hora (por ejemplo `07:00`) y pega este comando:
+Si un visitante borra o cambia datos, este comando deja la demo limpia y con las fechas de las certificaciones actualizadas. Ejecútalo en una consola **Bash**:
 
 ```bash
-cd /home/TU-USUARIO/Mineral_Manager && venv/bin/python manage.py cargar_demo --reset
+cd ~/Mineral_Manager && venv/bin/python manage.py cargar_demo --reset
 ```
 
-El plan gratuito permite una tarea diaria, que es justo lo que se necesita.
+> Las cuentas gratuitas creadas desde enero de 2026 no incluyen tareas programadas. En una cuenta pagada (o antigua) puedes automatizarlo en la pestaña **Tasks** con el comando `cd /home/TU-USUARIO/Mineral_Manager && venv/bin/python manage.py cargar_demo --reset`.
 
 ## 7. Mantenerla encendida
 
-En el plan gratuito la app se desactiva si no la renuevas cada **3 meses**. PythonAnywhere te avisa por correo antes: entra a la pestaña **Web** y presiona **Run until 3 months from today**.
+En el plan gratuito la app se desactiva si no la renuevas cada **mes**. PythonAnywhere te avisa por correo una semana antes: entra a la pestaña **Web** y presiona **Run until 1 month from today**.
 
 ---
 

@@ -2,10 +2,18 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y [versionado semántico](https://semver.org/lang/es/).
 
+## [2.1.1] - 2026-10-21
+
+### Agregado
+- Demo en línea en <https://jeff017.pythonanywhere.com> (usuario `demo`, contraseña `demo1234`), enlazada desde el README.
+
+### Cambiado
+- `DEPLOY.md` actualizado a los límites actuales del plan gratuito de PythonAnywhere: renovación mensual y sin tareas programadas.
+
 ## [2.1.0] - 2026-10-21
 
 ### Agregado
-- Guía `DEPLOY.md` para publicar la demo en PythonAnywhere, con reinicio diario de los datos.
+- Guía `DEPLOY.md` para publicar la demo en PythonAnywhere.
 - Configuración de producción leída desde variables de entorno o un archivo `.env`: `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, cookies seguras y `STATIC_ROOT` para `collectstatic`.
 - El Excel de ejemplo de la pantalla "Carga de datos" se genera al momento con las fechas del día.
 

@@ -13,7 +13,11 @@ trabajadores y certificaciones, maquinaria, bodega y pañol en un solo lugar.
 ![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap&logoColor=white)
 ![Chart.js](https://img.shields.io/badge/Chart.js-4-FF6384?logo=chartdotjs&logoColor=white)
 
-[Probar en 1 minuto](#-probar-en-1-minuto) · [Funcionalidades](#-funcionalidades) · [Capturas](#-capturas) · [Aspectos técnicos](#-aspectos-técnicos)
+### [🌐 Ver demo en vivo](https://jeff017.pythonanywhere.com)
+
+Usuario `demo` · Contraseña `demo1234`
+
+[Probar](#-probar) · [Funcionalidades](#-funcionalidades) · [Capturas](#-capturas) · [Aspectos técnicos](#-aspectos-técnicos)
 
 <img src="docs/img/inicio.png" alt="Panel principal de Mineral Manager" width="900">
 
@@ -21,7 +25,21 @@ trabajadores y certificaciones, maquinaria, bodega y pañol en un solo lugar.
 
 ---
 
-## 🚀 Probar en 1 minuto
+## 🚀 Probar
+
+### En línea (sin instalar nada)
+
+Entra a **<https://jeff017.pythonanywhere.com>** con la cuenta de demostración:
+
+| Usuario | Contraseña |
+|---|---|
+| `demo` | `demo1234` |
+
+En la pantalla de inicio de sesión también hay un botón **"Usar"** que completa los datos.
+
+> Es una demo pública: lo que agregues, edites o borres lo verán también otros visitantes. Puedes probar todo con libertad; los datos de ejemplo se pueden restaurar en cualquier momento.
+
+### En tu computador (1 minuto)
 
 Solo necesitas **Python 3.10 o superior** ([descargar](https://www.python.org/downloads/)).
 
