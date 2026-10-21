@@ -1,0 +1,196 @@
+{% comment %}
+    Tabla de inventario compartida por panol.html y bodega.html.
+    Parámetros (con {% include ... with %}):
+      ubicaciones   lista de Panol o Bodega
+      campo         "panol" o "bodega": nombre del campo de ubicación en el formulario
+      nombre_lugar  texto para mostrar ("pañol" o "bodega")
+      url_informe   URL del informe PDF de stock bajo
+{% endcomment %}
+
+<!-- Resumen rápido del inventario -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-4">
+        <div class="stat-card">
+            <span class="stat-icon tone-slate"><i class="bi bi-boxes"></i></span>
+            <div><div class="stat-value">{{ articulos|length }}</div><div class="stat-label">Artículos listados</div></div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4">
+        <a href="?cantidad_filtro=bajo" class="stat-card">
+            <span class="stat-icon tone-amber"><i class="bi bi-exclamation-triangle"></i></span>
+            <div><div class="stat-value">{{ advertencias|length }}</div><div class="stat-label">Con stock bajo (≤ 10)</div></div>
+        </a>
+    </div>
+    <div class="col-6 col-md-4">
+        <a href="?cantidad_filtro=agotado" class="stat-card">
+            <span class="stat-icon tone-red"><i class="bi bi-x-octagon"></i></span>
+            <div><div class="stat-value">{{ agotados }}</div><div class="stat-label">Agotados</div></div>
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body border-bottom">
+        <form method="GET" class="toolbar">
+            <div class="search">
+                <i class="bi bi-search"></i>
+                <input type="text" name="q" class="form-control" placeholder="Buscar por nombre o descripción" value="{{ search_query }}">
+            </div>
+            <select class="form-select" name="ubicacion">
+                <option value="">Todas las ubicaciones</option>
+                {% for lugar in ubicaciones %}
+                <option value="{{ lugar.id }}" {% if lugar.id|stringformat:"s" == ubicacion_id %}selected{% endif %}>{% firstof lugar.nombre_panol lugar.nombre_bodega %}</option>
+                {% endfor %}
+            </select>
+            <select class="form-select" name="cantidad_filtro">
+                <option value="">Todo el stock</option>
+                <option value="bajo" {% if cantidad_filtro == 'bajo' %}selected{% endif %}>Stock bajo</option>
+                <option value="agotado" {% if cantidad_filtro == 'agotado' %}selected{% endif %}>Agotado</option>
+            </select>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+            {% if request.GET %}<a href="?" class="btn btn-light">Limpiar</a>{% endif %}
+        </form>
+    </div>
+    <div class="card-body border-bottom d-flex flex-wrap gap-2">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg me-1"></i>Agregar artículo</button>
+        <a href="{{ url_informe }}" class="btn btn-light ms-md-auto"><i class="bi bi-file-earmark-pdf me-1"></i>Informe de stock bajo</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-modern">
+            <thead>
+                <tr><th>Artículo</th><th>Ubicación</th><th>Stock</th><th class="text-end">Acciones</th></tr>
+            </thead>
+            <tbody>
+                {% for articulo in articulos %}
+                <tr>
+                    <td>
+                        <div class="cell-main">{{ articulo.nombre_articulo }}</div>
+                        <div class="cell-sub">{{ articulo.descripcion_articulo }}</div>
+                    </td>
+                    <td>{% firstof articulo.panol.nombre_panol articulo.bodega.nombre_bodega "Sin asignar" %}</td>
+                    <td>
+                        {% if articulo.cantidad > 10 %}
+                            <span class="status status-ok">{{ articulo.cantidad }} u.</span>
+                        {% elif articulo.cantidad > 0 %}
+                            <span class="status status-warn">{{ articulo.cantidad }} u.</span>
+                        {% else %}
+                            <span class="status status-danger">Agotado</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end text-nowrap">
+                        <button class="btn-icon" data-bs-toggle="modal" data-bs-target="#editModal{{ articulo.id }}" title="Editar"><i class="bi bi-pencil"></i></button>
+                        <button class="btn-icon danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ articulo.id }}" title="Eliminar"><i class="bi bi-trash3"></i></button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="empty-state"><i class="bi bi-inbox"></i>No hay artículos que coincidan con el filtro.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modales de edición y eliminación (uno por artículo) -->
+{% for articulo in articulos %}
+<div class="modal fade" id="editModal{{ articulo.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="?editar_id={{ articulo.id }}" class="modal-content">
+            {% csrf_token %}
+            <input type="hidden" name="editar" value="1">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar artículo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Nombre</label>
+                    <input type="text" class="form-control" name="nombre_articulo" value="{{ articulo.nombre_articulo }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Descripción</label>
+                    <textarea class="form-control" name="descripcion_articulo" rows="2" required>{{ articulo.descripcion_articulo }}</textarea>
+                </div>
+                <div class="row g-3">
+                    <div class="col-5">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" class="form-control" name="cantidad" value="{{ articulo.cantidad }}" min="0" required>
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label">Ubicación</label>
+                        <select class="form-select" name="{{ campo }}" required>
+                            {% for lugar in ubicaciones %}
+                            <option value="{{ lugar.id }}" {% if lugar.id == articulo.panol_id or lugar.id == articulo.bodega_id %}selected{% endif %}>{% firstof lugar.nombre_panol lugar.nombre_bodega %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal{{ articulo.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="?eliminar_id={{ articulo.id }}" class="modal-content">
+            {% csrf_token %}
+            <input type="hidden" name="eliminar" value="1">
+            <div class="modal-body text-center p-4">
+                <span class="stat-icon tone-red mb-3"><i class="bi bi-trash3"></i></span>
+                <h5>¿Eliminar "{{ articulo.nombre_articulo }}"?</h5>
+                <p class="text-muted mb-0">Se quitará del inventario de {{ nombre_lugar }}.</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-danger">Eliminar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Modal para agregar un artículo -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="?crear=1" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title">Agregar artículo a {{ nombre_lugar }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Nombre</label>
+                    <input type="text" class="form-control" name="nombre_articulo" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Descripción</label>
+                    <textarea class="form-control" name="descripcion_articulo" rows="2" required></textarea>
+                </div>
+                <div class="row g-3">
+                    <div class="col-5">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" class="form-control" name="cantidad" min="0" required>
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label">Ubicación</label>
+                        <select class="form-select" name="{{ campo }}" required>
+                            <option value="">Selecciona…</option>
+                            {% for lugar in ubicaciones %}
+                            <option value="{{ lugar.id }}">{% firstof lugar.nombre_panol lugar.nombre_bodega %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary" name="crear">Agregar</button>
+            </div>
+        </form>
+    </div>
+</div>

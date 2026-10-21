@@ -1,0 +1,42 @@
+{# Listas desplegables de área, cargo, turno, jornada y horario. #}
+{# Si existe "trabajador" en el contexto (edición), marca sus valores actuales. #}
+<div class="col-md-6">
+    <label for="area" class="form-label">Área</label>
+    <select class="form-select" id="area" name="area" required>
+        {% for area in areas %}
+        <option value="{{ area.id }}" {% if trabajador.area_id == area.id %}selected{% endif %}>{{ area.nombre_area }}</option>
+        {% endfor %}
+    </select>
+</div>
+<div class="col-md-6">
+    <label for="cargo" class="form-label">Cargo</label>
+    <select class="form-select" id="cargo" name="cargo" required>
+        {% for cargo in cargos %}
+        <option value="{{ cargo.id }}" {% if trabajador.cargo_id == cargo.id %}selected{% endif %}>{{ cargo.nombre_cargo }}</option>
+        {% endfor %}
+    </select>
+</div>
+<div class="col-md-4">
+    <label for="turno" class="form-label">Turno</label>
+    <select class="form-select" id="turno" name="turno" required>
+        {% for turno in turnos %}
+        <option value="{{ turno.id }}" {% if trabajador.turno_id == turno.id %}selected{% endif %}>{{ turno.tipo_turno }}</option>
+        {% endfor %}
+    </select>
+</div>
+<div class="col-md-4">
+    <label for="jornada" class="form-label">Jornada</label>
+    <select class="form-select" id="jornada" name="jornada" required>
+        {% for jornada in jornadas %}
+        <option value="{{ jornada.id }}" {% if trabajador.jornada_id == jornada.id %}selected{% endif %}>{{ jornada.tipo_jornada }}</option>
+        {% endfor %}
+    </select>
+</div>
+<div class="col-md-4">
+    <label for="horario" class="form-label">Horario</label>
+    <select class="form-select" id="horario" name="horario" required>
+        {% for horario in horarios %}
+        <option value="{{ horario.id }}" {% if trabajador.horario_id == horario.id %}selected{% endif %}>{{ horario.ciclo }}</option>
+        {% endfor %}
+    </select>
+</div>

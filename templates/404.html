@@ -1,13 +1,12 @@
-<!-- templates/404.html -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Página no encontrada</title>
-</head>
-<body>
-    <h1>Error 404</h1>
-    <p>Lo sentimos, pero la página que estás buscando no existe.</p>
-    <a href="/">Volver al inicio</a>
-</body>
-</html>
+{% extends "auth_base.html" %}
+
+{% block title %}Página no encontrada{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <div class="display-3 fw-bold text-primary">404</div>
+    <h1>Página no encontrada</h1>
+    <p class="subtitle">La página que buscas no existe o fue movida.</p>
+    <a href="/" class="btn btn-primary mt-3"><i class="bi bi-house me-1"></i>Volver al inicio</a>
+</div>
+{% endblock %}

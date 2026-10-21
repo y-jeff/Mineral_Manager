@@ -1,250 +1,199 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    {% load static %}
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Trabajadores</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-    <style>
-        .table-bordered {
-            border: 1px solid #dee2e6;
-        }
-        .table-bordered th, .table-bordered td {
-            border: 1px solid #dee2e6;
-        }
-        .alert-warning {
-            margin-bottom: 15px;
-        }
-        .table {
-            margin-bottom: 0;
-        }
-    </style>
-</head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-0 py-3">
-            <div class="container-xl">
-                <a class="navbar-brand" href="/home"><h4>Mineral Manager</h4></a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarCollapse">
-                    <div class="navbar-nav mx-lg-auto">
-                        <a class="nav-item nav-link" href="/home">Home</a>
-                        <a class="nav-item nav-link active" href="/trabajadores">Trabajadores</a>
-                        <a class="nav-item nav-link" href="/maquinaria">Maquinaria</a>
-                        <a class="nav-item nav-link" href="/pañol">Pañol</a>
-                        <a class="nav-item nav-link" href="/bodega">Bodega</a>
-                        <a class="nav-item nav-link" href="/retiro">Retiro de Artículo</a>
-                        <a class="nav-item nav-link" href="/articulobodega">Bodega a Pañol</a>
-                        <a class="nav-item nav-link" href="/upload">Subir Archivo</a>
-                    </div>
-                </div>
+{% extends "base.html" %}
+
+{% block title %}Trabajadores{% endblock %}
+{% block page_title %}Trabajadores{% endblock %}
+{% block page_subtitle %}{{ trabajadores_data|length }} trabajador{{ trabajadores_data|length|pluralize:"es" }} activo{{ trabajadores_data|length|pluralize }}{% endblock %}
+
+{% block content %}
+{% if advertencia %}
+<div class="alert alert-warning d-flex align-items-center gap-2">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <div>Hay trabajadores con certificaciones próximas a vencer o vencidas.
+        <a href="?certificacion=expira_90" class="alert-link">Ver cuáles</a></div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body border-bottom">
+        <!-- Filtros: se envían por GET y la vista trabajadores_view los aplica -->
+        <form method="GET" class="toolbar">
+            <div class="search">
+                <i class="bi bi-search"></i>
+                <input type="text" name="search" class="form-control" placeholder="Buscar por nombre, RUT, área o cargo" value="{{ request.GET.search }}">
             </div>
-                     <!-- Dropdown de usuario -->
-                     <style>
-                        .dropdown-item.text-danger:hover {
-                          color: white !important;
-                          background-color: red !important;
-                        }
-                      </style>
-                     <div class="dropdown">
-                        <button class="btn btn-outline-light dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            {{ request.user.username }}
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                            <li class="dropdown-header">
-                                <strong>{{ request.user.username }}</strong><br>
-                                <small>{{ request.user.email }}</small>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger" href="{% url 'logout' %}">Cerrar Sesión</a></li>
-                        </ul>
-                    </div>
-        </nav>
-    </header>
-
-    <main class="container mt-4">
-        <h1>Gestión de Trabajadores</h1>
-
-        <!-- Advertencia -->
-        {% if advertencia %}
-        <div class="alert alert-warning" role="alert">
-            <strong>Advertencia:</strong> Algunos trabajadores tienen certificaciones próximas a expirar o ya expiradas.
-        </div>
-        {% endif %}
-        
-
-        <!--Barra de busqueda-->
-        <form method="GET" class="mb-3">
-            <div class="row">
-                <div class="col-md-4">
-                    <input type="text" name="search" class="form-control" placeholder="Buscar por nombre, RUT, área, cargo, etc." value="{{ request.GET.search }}">
-                </div>
-                <div class="col-md-2">
-                    <select name="area" class="form-select">
-                        <option value="">Filtrar por área</option>
-                        {% for area in areas %}
-                        <option value="{{ area.id }}" {% if request.GET.area == area.id|stringformat:"s" %}selected{% endif %}>{{ area.nombre_area }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <select name="turno" class="form-select">
-                        <option value="">Filtrar por turno</option>
-                        <option value="A" {% if request.GET.turno == "A" %}selected{% endif %}>A</option>
-                        <option value="B" {% if request.GET.turno == "B" %}selected{% endif %}>B</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <select name="certificacion" class="form-select">
-                        <option value="">Filtrar por certificación</option>
-                        <option value="expira_30" {% if request.GET.certificacion == "expira_30" %}selected{% endif %}>Próximas a expirar (30 días)</option>
-                        <option value="expira_90" {% if request.GET.certificacion == "expira_90" %}selected{% endif %}>Próximas a expirar (90 días)</option>
-                        <option value="expirada" {% if request.GET.certificacion == "expirada" %}selected{% endif %}>Expiradas</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">Buscar</button>
-                </div>
-            </div>
+            <select name="area" class="form-select">
+                <option value="">Todas las áreas</option>
+                {% for area in areas %}
+                <option value="{{ area.id }}" {% if request.GET.area == area.id|stringformat:"s" %}selected{% endif %}>{{ area.nombre_area }}</option>
+                {% endfor %}
+            </select>
+            <select name="turno" class="form-select">
+                <option value="">Todos los turnos</option>
+                <option value="A" {% if request.GET.turno == "A" %}selected{% endif %}>Turno A</option>
+                <option value="B" {% if request.GET.turno == "B" %}selected{% endif %}>Turno B</option>
+            </select>
+            <select name="certificacion" class="form-select">
+                <option value="">Todas las certificaciones</option>
+                <option value="expira_30" {% if request.GET.certificacion == "expira_30" %}selected{% endif %}>Vencen en 30 días</option>
+                <option value="expira_90" {% if request.GET.certificacion == "expira_90" %}selected{% endif %}>Vencen en 90 días</option>
+                <option value="expirada" {% if request.GET.certificacion == "expirada" %}selected{% endif %}>Vencidas</option>
+            </select>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+            {% if request.GET %}<a href="{% url 'gestion_trabajadores' %}" class="btn btn-light">Limpiar</a>{% endif %}
         </form>
-        
+    </div>
+    <div class="card-body border-bottom d-flex flex-wrap gap-2">
+        <a href="{% url 'add_trabajador' %}" class="btn btn-primary"><i class="bi bi-person-plus me-1"></i>Agregar trabajador</a>
+        <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#addCertificationModal"><i class="bi bi-award me-1"></i>Nuevo tipo de certificación</button>
+        <a href="{% url 'descargar_informe_trabajadores' %}" class="btn btn-light ms-md-auto"><i class="bi bi-file-earmark-pdf me-1"></i>Descargar informe</a>
+    </div>
 
-        <div class="d-flex justify-content-between mb-3">
-            <a href="{% url 'add_trabajador' %}" class="btn btn-success">Agregar Trabajador</a>
-            <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#addCertificationModal">Agregar Certificación</button>
-            <a href="{% url 'descargar_informe_trabajadores' %}" class="btn btn-warning">Descargar Informe</a>
-        </div>
-
-        <table class="table table-striped table-bordered">
-            <thead class="table-dark">
-                <tr>
-                    <th>RUT</th>
-                    <th>Nombre</th>
-                    <th>Área</th>
-                    <th>Cargo</th>
-                    <th>Turno</th>
-                    <th>Acciones</th>
-                </tr>
+    <div class="table-responsive">
+        <table class="table table-modern">
+            <thead>
+                <tr><th>Trabajador</th><th>Área</th><th>Cargo</th><th>Turno</th><th>Certificaciones</th><th class="text-end">Acciones</th></tr>
             </thead>
             <tbody>
                 {% for data in trabajadores_data %}
                 <tr>
-                    <td>{{ data.trabajador.rut }}</td>
-                    <td>{{ data.trabajador.nombre_trabajador }}</td>
+                    <td>
+                        <div class="cell-main">{{ data.trabajador.nombre_trabajador }}</div>
+                        <div class="cell-sub">{{ data.trabajador.rut }}</div>
+                    </td>
                     <td>{{ data.trabajador.area.nombre_area }}</td>
                     <td>{{ data.trabajador.cargo.nombre_cargo }}</td>
-                    <td>{{ data.trabajador.turno.tipo_turno }}</td>
+                    <td><span class="status status-neutral">{{ data.trabajador.turno.tipo_turno }}</span></td>
                     <td>
-                        <!-- Botón para ver detalles del trabajador -->
-                        <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#viewWorkerModal{{ data.trabajador.rut }}">Ver</button>
-                        <!-- Botón para editar -->  
-                        <a href="{% url 'editar_trabajador' data.trabajador.rut %}" class="btn btn-info btn-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" style="fill: rgba(0, 0, 0, 1);transform: ;msFilter:;"><path d="m18.988 2.012 3 3L19.701 7.3l-3-3zM8 16h3l7.287-7.287-3-3L8 13z"></path><path d="M19 19H8.158c-.026 0-.053.01-.079.01-.033 0-.066-.009-.1-.01H5V5h6.847l2-2H5c-1.103 0-2 .896-2 2v14c0 1.104.897 2 2 2h14a2 2 0 0 0 2-2v-8.668l-2 2V19z"></path></svg>
-                        </a>
-                        <!-- Botón para eliminar -->
-                        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarTrabajador('{{ data.trabajador.rut }}')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" style="fill: rgba(0, 0, 0, 1);transform: ;msFilter:;"><path d="M5 20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8h2V6h-4V4a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H3v2h2zM9 4h6v2H9zM8 8h9v12H7V8z"></path><path d="M9 10h2v8H9zm4 0h2v8h-2z"></path></svg>
-                        </button>
+                        {% if data.vencidas %}
+                            <span class="status status-danger">{{ data.vencidas }} vencida{{ data.vencidas|pluralize }}</span>
+                        {% elif data.por_vencer %}
+                            <span class="status status-warn">{{ data.por_vencer }} por vencer</span>
+                        {% elif data.certificaciones %}
+                            <span class="status status-ok">Al día</span>
+                        {% else %}
+                            <span class="text-muted small">Sin registros</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end text-nowrap">
+                        <button class="btn-icon" data-bs-toggle="modal" data-bs-target="#verTrabajador{{ forloop.counter }}" title="Ver detalle"><i class="bi bi-eye"></i></button>
+                        <a href="{% url 'editar_trabajador' data.trabajador.rut %}" class="btn-icon" title="Editar"><i class="bi bi-pencil"></i></a>
+                        <button type="button" class="btn-icon danger" onclick="eliminarTrabajador('{{ data.trabajador.rut }}', '{{ data.trabajador.nombre_trabajador|escapejs }}')" title="Dar de baja"><i class="bi bi-trash3"></i></button>
                     </td>
                 </tr>
-        
-                <!-- Modal para Ver Trabajador -->
-                <div class="modal fade" id="viewWorkerModal{{ data.trabajador.rut }}" tabindex="-1">
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Detalles de {{ data.trabajador.nombre_trabajador }}</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                <h6><strong>Información Básica</strong></h6>
-                                <p><strong>RUT:</strong> {{ data.trabajador.rut }}</p>
-                                <p><strong>Nombre:</strong> {{ data.trabajador.nombre_trabajador }}</p>
-                                <p><strong>Área:</strong> {{ data.trabajador.area.nombre_area }}</p>
-                                <p><strong>Cargo:</strong> {{ data.trabajador.cargo.nombre_cargo }}</p>
-                                <p><strong>Turno:</strong> {{ data.trabajador.turno.tipo_turno }}</p>
-                                <p><strong>Jornada:</strong> {{ data.trabajador.jornada.tipo_jornada }}</p>
-                                <p><strong>Horario:</strong> {{ data.trabajador.horario.ciclo }}</p>
-                                <p><strong>Horas Trabajadas:</strong> {{ data.horas_trabajadas }}</p>
-                                <p><strong>Horas Esperadas:</strong> {{ data.horas_esperadas }}</p>
-        
-                                <h6 class="mt-4"><strong>Certificaciones</strong></h6>
-                                {% if data.certificaciones %}
-                                <ul class="list-group">
-                                    {% for cert in data.certificaciones %}
-                                    <li class="list-group-item">
-                                        <strong>{{ cert.capacitacion.nombre_capacitacion }}</strong><br>
-                                        <span>Inicio: {{ cert.fecha_inicio }} - Fin: {{ cert.fecha_fin }}</span>
-                                    </li>
-                                    {% endfor %}
-                                </ul>
-                                {% else %}
-                                <p>No hay certificaciones asignadas.</p>
-                                {% endif %}
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {% empty %}
+                <tr><td colspan="6" class="empty-state"><i class="bi bi-people"></i>No hay trabajadores que coincidan con la búsqueda.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
-        
-    </main>
-            <!-- Modal para agregar certificación -->
-        <div class="modal fade" id="addCertificationModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Agregar Certificación</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="addCertForm">
-                            <div class="mb-3">
-                                <label for="nombreCertificacion" class="form-label">Nombre de la Certificación</label>
-                                <input type="text" id="nombreCertificacion" class="form-control" placeholder="Ingrese el nombre de la certificación">
-                            </div>
-                            <div class="form-check mb-3">
-                                <input type="checkbox" id="esRenovable" class="form-check-input">
-                                <label class="form-check-label" for="esRenovable">¿Es renovable?</label>
-                            </div>
-                            <button type="button" id="guardarCertificacion" class="btn btn-primary">Guardar</button>
-                        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Detalle de cada trabajador -->
+{% for data in trabajadores_data %}
+<div class="modal fade" id="verTrabajador{{ forloop.counter }}" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="avatar" style="width:44px;height:44px;font-size:1.1rem">{{ data.trabajador.nombre_trabajador|first }}</span>
+                    <div>
+                        <h5 class="modal-title mb-0">{{ data.trabajador.nombre_trabajador }}</h5>
+                        <small class="text-muted">{{ data.trabajador.cargo.nombre_cargo }} · {{ data.trabajador.rut }}</small>
                     </div>
                 </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="detail-list mb-4">
+                    <div><dt>Área</dt><dd>{{ data.trabajador.area.nombre_area }}</dd></div>
+                    <div><dt>Turno</dt><dd>{{ data.trabajador.turno.tipo_turno }}</dd></div>
+                    <div><dt>Jornada</dt><dd>{{ data.trabajador.jornada.tipo_jornada }}</dd></div>
+                    <div><dt>Horario</dt><dd>{{ data.trabajador.horario.ciclo }}</dd></div>
+                    <div><dt>Horas trabajadas</dt><dd>{{ data.horas_trabajadas }} / {{ data.horas_esperadas }} esperadas</dd></div>
+                </dl>
+                <h6 class="fw-semibold mb-3">Certificaciones</h6>
+                {% if data.certificaciones %}
+                <div class="table-responsive">
+                    <table class="table table-modern border rounded">
+                        <thead><tr><th>Certificación</th><th>Inicio</th><th>Vence</th></tr></thead>
+                        <tbody>
+                            {% for cert in data.certificaciones %}
+                            <tr>
+                                <td class="cell-main">{{ cert.capacitacion.nombre_capacitacion }}</td>
+                                <td>{{ cert.fecha_inicio|date:"d-m-Y" }}</td>
+                                <td>{{ cert.fecha_fin|date:"d-m-Y"|default:"No vence" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No tiene certificaciones registradas.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <a href="{% url 'editar_trabajador' data.trabajador.rut %}" class="btn btn-light"><i class="bi bi-pencil me-1"></i>Editar</a>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
+    </div>
+</div>
+{% endfor %}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        function eliminarTrabajador(rut) {
-            if (confirm('¿Estás seguro de que deseas eliminar este trabajador?')) {
-                fetch(`/trabajadores/eliminar/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token }}'
-                    },
-                    body: JSON.stringify({ rut: rut })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        location.reload();
-                    } else {
-                        alert(data.message || 'Error al intentar eliminar al trabajador.');
-                    }
-                })
-                .catch(error => console.error('Error:', error));
-            }
+<!-- Crear un nuevo tipo de certificación (luego se asigna desde Agregar/Editar trabajador) -->
+<div class="modal fade" id="addCertificationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" id="addCertForm">
+            <div class="modal-header">
+                <h5 class="modal-title">Nuevo tipo de certificación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="nombreCertificacion" class="form-label">Nombre</label>
+                    <input type="text" id="nombreCertificacion" class="form-control" placeholder="Ej: Trabajo en altura" required>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="esRenovable" class="form-check-input">
+                    <label class="form-check-label" for="esRenovable">Es renovable (tiene fecha de vencimiento)</label>
+                </div>
+                <div id="certError" class="alert alert-danger mt-3 d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    /** Da de baja a un trabajador (la vista lo marca como inactivo). */
+    async function eliminarTrabajador(rut, nombre) {
+        if (!confirm(`¿Dar de baja a ${nombre}?`)) return;
+        const data = await postJSON("{% url 'eliminar_trabajador' %}", {rut});
+        if (data.success) location.reload();
+        else alert(data.message || 'No se pudo dar de baja al trabajador.');
+    }
+
+    // Guarda un nuevo tipo de certificación sin recargar la página
+    document.getElementById('addCertForm').addEventListener('submit', async evento => {
+        evento.preventDefault();
+        const data = await postJSON("{% url 'agregar_capacitacion' %}", {
+            nombre: document.getElementById('nombreCertificacion').value,
+            es_renovable: document.getElementById('esRenovable').checked,
+        });
+        if (data.success) {
+            location.reload();
+        } else {
+            const error = document.getElementById('certError');
+            error.textContent = data.message;
+            error.classList.remove('d-none');
         }
-    </script>
-</body>
-</html>
+    });
+</script>
+{% endblock %}

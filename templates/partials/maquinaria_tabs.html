@@ -1,0 +1,9 @@
+{# Pestañas para cambiar entre el historial de mantenimientos y de trabajos de un equipo. #}
+<ul class="nav nav-pills mb-3 gap-2">
+    <li class="nav-item">
+        <a class="nav-link {% if activo == 'mantenimientos' %}active{% else %}bg-white border{% endif %}" href="{% url 'ver_mantenimientos' maquinaria.id %}"><i class="bi bi-wrench me-1"></i>Mantenimientos</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if activo == 'trabajos' %}active{% else %}bg-white border{% endif %}" href="{% url 'ver_trabajos' maquinaria.id %}"><i class="bi bi-clock-history me-1"></i>Trabajos</a>
+    </li>
+</ul>

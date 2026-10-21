@@ -1,0 +1,43 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Acceso{% endblock %} · Mineral Manager</title>
+    <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{% static 'CSS/theme.css' %}">
+</head>
+<body class="auth">
+    <!-- Layout de dos columnas para login, recuperación de contraseña y páginas de error -->
+    <div class="auth-wrapper">
+        <section class="auth-hero d-none d-lg-flex">
+            <div>
+                <span class="brand-icon brand-icon-lg"><i class="bi bi-minecart-loaded"></i></span>
+                <h2>Mineral<strong>Manager</strong></h2>
+                <p class="lead">Gestión operativa de faenas mineras en un solo lugar.</p>
+                <ul class="auth-features">
+                    <li><i class="bi bi-people"></i> Trabajadores, turnos y certificaciones</li>
+                    <li><i class="bi bi-truck"></i> Maquinaria, mantenimientos y horas de uso</li>
+                    <li><i class="bi bi-box-seam"></i> Inventario de bodega y pañol con alertas</li>
+                    <li><i class="bi bi-file-earmark-spreadsheet"></i> Carga masiva desde Excel o CSV</li>
+                </ul>
+            </div>
+        </section>
+        <section class="auth-panel">
+            <div class="auth-card">
+                <div class="d-lg-none text-center mb-4">
+                    <span class="brand-icon"><i class="bi bi-minecart-loaded"></i></span>
+                    <h2 class="h4 mt-2">Mineral<strong>Manager</strong></h2>
+                </div>
+                {% block content %}{% endblock %}
+            </div>
+        </section>
+    </div>
+    <script src="{% static 'JScript/app.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,54 @@
+{# JavaScript compartido por add_trabajador.html y editar_trabajador.html para asignar certificaciones. #}
+{# Necesita en el contexto: capacitaciones_disponibles. #}
+<template id="plantillaCertificacion">
+    <div class="cert-block">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Nueva certificación</strong>
+            <button type="button" class="btn-icon danger" onclick="this.closest('.cert-block').remove()" title="Quitar"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Certificación</label>
+                <select class="form-select" data-name="certificacion_nueva" required>
+                    {% for capacitacion in capacitaciones_disponibles %}
+                    <option value="{{ capacitacion.id }}" data-renovable="{{ capacitacion.es_renovable|yesno:'true,false' }}">{{ capacitacion.nombre_capacitacion }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Inicio</label>
+                <input type="date" class="form-control" data-name="fecha_inicio_nueva" required>
+            </div>
+            <div class="col-md-3 fecha-fin">
+                <label class="form-label">Vencimiento</label>
+                <input type="date" class="form-control" data-name="fecha_fin_nueva">
+            </div>
+        </div>
+    </div>
+</template>
+<script>
+    let contadorCertificaciones = 0;
+
+    /**
+     * Agrega un bloque para asignar una certificación. Los campos se nombran
+     * certificacion_nueva_N, fecha_inicio_nueva_N y fecha_fin_nueva_N, que es lo que leen las vistas.
+     */
+    function agregarCertificacion() {
+        contadorCertificaciones++;
+        const bloque = document.getElementById('plantillaCertificacion').content.cloneNode(true);
+        bloque.querySelectorAll('[data-name]').forEach(campo => {
+            campo.name = `${campo.dataset.name}_${contadorCertificaciones}`;
+        });
+        const select = bloque.querySelector('select');
+        const fechaFin = bloque.querySelector('.fecha-fin');
+        // Las certificaciones no renovables no tienen fecha de vencimiento
+        const actualizarFechaFin = () => {
+            const renovable = select.selectedOptions[0]?.dataset.renovable === 'true';
+            fechaFin.classList.toggle('d-none', !renovable);
+            if (!renovable) fechaFin.querySelector('input').value = '';
+        };
+        select.addEventListener('change', actualizarFechaFin);
+        actualizarFechaFin();
+        document.getElementById('nuevas-certificaciones').appendChild(bloque);
+    }
+</script>
